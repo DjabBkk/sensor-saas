@@ -1,36 +1,48 @@
-"use node";
+import type { QingpingDeviceData, QingpingWebhookBody } from "../types";
 
-import crypto from "crypto";
+const toHex = (bytes: ArrayBuffer) =>
+  Array.from(new Uint8Array(bytes))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 
-import type { QingpingWebhookItem, QingpingWebhookPayload } from "../types";
-
-export const verifyQingpingSignature = (
-  rawBody: string,
-  signature: string | null,
-  secret: string | null,
-) => {
-  if (!signature || !secret) {
+export const verifyQingpingSignature = async (
+  timestamp: number,
+  token: string,
+  signature: string,
+  appSecret: string,
+): Promise<boolean> => {
+  if (!signature || !appSecret) {
     return false;
   }
 
-  const digest = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
+  if (!globalThis.crypto?.subtle) {
+    return false;
+  }
+
+  const dataToSign = `${timestamp}${token}`;
+  const encoder = new TextEncoder();
+  const key = await globalThis.crypto.subtle.importKey(
+    "raw",
+    encoder.encode(appSecret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signatureBuffer = await globalThis.crypto.subtle.sign(
+    "HMAC",
+    key,
+    encoder.encode(dataToSign),
+  );
+  const digest = toHex(signatureBuffer);
   return digest === signature;
 };
 
-export const extractWebhookItems = (
-  payload: QingpingWebhookPayload,
-): QingpingWebhookItem[] => {
-  if (Array.isArray(payload.data)) {
-    return payload.data;
-  }
-
-  if (Array.isArray(payload.devices)) {
-    return payload.devices;
-  }
-
-  if (Array.isArray(payload.device_data)) {
-    return payload.device_data;
-  }
-
-  return [];
+export const extractReadingsFromWebhook = (
+  body: QingpingWebhookBody,
+): { mac: string; deviceName: string; readings: QingpingDeviceData[] } => {
+  return {
+    mac: body.payload.info.mac,
+    deviceName: body.payload.info.name,
+    readings: body.payload.data ?? [],
+  };
 };

@@ -1,68 +1,64 @@
-"use node";
-
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 
 import { internal } from "./_generated/api";
-import { extractWebhookItems, verifyQingpingSignature } from "./providers/qingping/webhooks";
+import {
+  extractReadingsFromWebhook,
+  verifyQingpingSignature,
+} from "./providers/qingping/webhooks";
 import { mapQingpingReading } from "./providers/qingping/mappers";
+import type { QingpingWebhookBody } from "./providers/types";
 import { Id } from "./_generated/dataModel";
 
 const http = httpRouter();
 
 http.route({
-  path: "/webhooks/qingping",
+  path: "/webhooks/qingping/:userId",
   method: "POST",
   handler: httpAction(async (ctx, req) => {
-    const rawBody = await req.text();
-    const signature =
-      req.headers.get("x-qingping-signature") ?? req.headers.get("x-signature");
-
-    const payload = JSON.parse(rawBody) as {
-      provider?: "qingping";
-      userId?: string;
-      [key: string]: unknown;
-    };
-
-    const userId = payload.userId as Id<"users"> | undefined;
+    const url = new URL(req.url);
+    const pathParts = url.pathname.split("/").filter(Boolean);
+    const userId = pathParts[pathParts.length - 1] as Id<"users"> | undefined;
     if (!userId) {
       return new Response("Missing userId", { status: 400 });
     }
+
+    const body = (await req.json()) as QingpingWebhookBody;
 
     const config = await ctx.runQuery(internal.providers.getConfig, {
       userId,
       provider: "qingping",
     });
 
-    if (!config?.webhookSecret) {
+    if (!config?.appSecret) {
       return new Response("Webhook secret missing", { status: 401 });
     }
 
-    const isValid = verifyQingpingSignature(rawBody, signature, config.webhookSecret);
+    const isValid = await verifyQingpingSignature(
+      body.signature.timestamp,
+      body.signature.token,
+      body.signature.signature,
+      config.appSecret,
+    );
     if (!isValid) {
       return new Response("Invalid signature", { status: 401 });
     }
 
-    const items = extractWebhookItems(payload);
-    for (const item of items) {
-      const mac = item.mac;
-      if (!mac) {
-        continue;
-      }
+    const { mac, readings } = extractReadingsFromWebhook(body);
+    const deviceInfo = await ctx.runQuery(
+      internal.devices.getByProviderDeviceId,
+      {
+        provider: "qingping",
+        providerDeviceId: mac,
+      },
+    );
 
-      const deviceInfo = await ctx.runQuery(
-        internal.devices.getByProviderDeviceId,
-        {
-          provider: "qingping",
-          providerDeviceId: mac,
-        },
-      );
+    if (!deviceInfo || deviceInfo.userId !== userId) {
+      return new Response("Unknown device", { status: 404 });
+    }
 
-      if (!deviceInfo) {
-        continue;
-      }
-
-      const reading = mapQingpingReading(item.data);
+    for (const data of readings) {
+      const reading = mapQingpingReading(data);
       if (!reading) {
         continue;
       }

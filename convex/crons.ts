@@ -6,14 +6,14 @@ const crons = cronJobs();
 crons.interval(
   "refresh-qingping-tokens",
   { minutes: 90 },
-  internal.providers.refreshExpiringTokens,
+  internal.providersActions.refreshExpiringTokens,
   {},
 );
 
 crons.interval(
   "poll-qingping-readings",
   { minutes: 5 },
-  internal.providers.pollAllReadings,
+  internal.providersActions.pollAllReadings,
   {},
 );
 

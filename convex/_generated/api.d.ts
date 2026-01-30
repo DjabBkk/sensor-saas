@@ -70,6 +70,20 @@ export declare const api: {
       null
     >;
   };
+  providers: {
+    connect: FunctionReference<
+      "mutation",
+      "public",
+      {
+        appKey: string;
+        appSecret: string;
+        provider: "qingping" | "purpleair" | "iqair" | "temtop";
+        userId: Id<"users">;
+        webhookSecret?: string;
+      },
+      null
+    >;
+  };
   readings: {
     history: FunctionReference<
       "query",
@@ -117,6 +131,71 @@ export declare const api: {
       }
     >;
   };
+  rooms: {
+    create: FunctionReference<
+      "mutation",
+      "public",
+      { name: string; userId: Id<"users"> },
+      Id<"rooms">
+    >;
+    get: FunctionReference<
+      "query",
+      "public",
+      { roomId: Id<"rooms"> },
+      {
+        _creationTime: number;
+        _id: Id<"rooms">;
+        createdAt: number;
+        name: string;
+        userId: Id<"users">;
+      } | null
+    >;
+    list: FunctionReference<
+      "query",
+      "public",
+      { userId: Id<"users"> },
+      Array<{
+        _creationTime: number;
+        _id: Id<"rooms">;
+        createdAt: number;
+        name: string;
+        userId: Id<"users">;
+      }>
+    >;
+    remove: FunctionReference<
+      "mutation",
+      "public",
+      { roomId: Id<"rooms">; userId: Id<"users"> },
+      null
+    >;
+    update: FunctionReference<
+      "mutation",
+      "public",
+      { name: string; roomId: Id<"rooms">; userId: Id<"users"> },
+      null
+    >;
+  };
+  users: {
+    getCurrentUser: FunctionReference<
+      "query",
+      "public",
+      { authId: string },
+      {
+        _id: Id<"users">;
+        authId: string;
+        createdAt: number;
+        email: string;
+        name?: string;
+        plan: "free" | "basic" | "pro" | "team";
+      } | null
+    >;
+    getOrCreateUser: FunctionReference<
+      "mutation",
+      "public",
+      { authId: string; email: string; name?: string },
+      Id<"users">
+    >;
+  };
 };
 
 /**
@@ -150,6 +229,119 @@ export declare const internal: {
         userId: Id<"users">;
       },
       Id<"devices">
+    >;
+  };
+  providers: {
+    getConfig: FunctionReference<
+      "query",
+      "internal",
+      {
+        provider: "qingping" | "purpleair" | "iqair" | "temtop";
+        userId: Id<"users">;
+      },
+      null | {
+        _creationTime: number;
+        _id: Id<"providerConfigs">;
+        accessToken: string;
+        appKey?: string;
+        appSecret?: string;
+        lastSyncAt?: number;
+        provider: "qingping" | "purpleair" | "iqair" | "temtop";
+        tokenExpiresAt: number;
+        userId: Id<"users">;
+        webhookSecret?: string;
+      }
+    >;
+    insertConfig: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        accessToken: string;
+        appKey: string;
+        appSecret: string;
+        provider: "qingping" | "purpleair" | "iqair" | "temtop";
+        tokenExpiresAt: number;
+        userId: Id<"users">;
+        webhookSecret?: string;
+      },
+      null
+    >;
+    listAllConfigs: FunctionReference<
+      "query",
+      "internal",
+      {},
+      Array<{
+        _creationTime: number;
+        _id: Id<"providerConfigs">;
+        accessToken: string;
+        appKey?: string;
+        appSecret?: string;
+        lastSyncAt?: number;
+        provider: "qingping" | "purpleair" | "iqair" | "temtop";
+        tokenExpiresAt: number;
+        userId: Id<"users">;
+        webhookSecret?: string;
+      }>
+    >;
+    updateConfig: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        accessToken: string;
+        appKey: string;
+        appSecret: string;
+        configId: Id<"providerConfigs">;
+        tokenExpiresAt: number;
+        webhookSecret?: string;
+      },
+      null
+    >;
+    updateLastSync: FunctionReference<
+      "mutation",
+      "internal",
+      { providerConfigId: Id<"providerConfigs"> },
+      null
+    >;
+    updateToken: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        accessToken: string;
+        providerConfigId: Id<"providerConfigs">;
+        tokenExpiresAt: number;
+      },
+      null
+    >;
+  };
+  providersActions: {
+    connectAndSync: FunctionReference<
+      "action",
+      "internal",
+      {
+        appKey: string;
+        appSecret: string;
+        provider: "qingping" | "purpleair" | "iqair" | "temtop";
+        userId: Id<"users">;
+        webhookSecret?: string;
+      },
+      null
+    >;
+    fetchAccessToken: FunctionReference<
+      "action",
+      "internal",
+      { appKey: string; appSecret: string },
+      { accessToken: string; tokenExpiresAt: number }
+    >;
+    pollAllReadings: FunctionReference<"action", "internal", {}, null>;
+    refreshExpiringTokens: FunctionReference<"action", "internal", {}, null>;
+    syncDevicesForUser: FunctionReference<
+      "action",
+      "internal",
+      {
+        provider: "qingping" | "purpleair" | "iqair" | "temtop";
+        userId: Id<"users">;
+      },
+      null
     >;
   };
   readings: {

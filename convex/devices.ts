@@ -49,9 +49,7 @@ export const updateRoom = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    if (args.roomId !== undefined) {
-      await ctx.db.patch(args.deviceId, { roomId: args.roomId });
-    }
+    await ctx.db.patch(args.deviceId, { roomId: args.roomId });
     return null;
   },
 });

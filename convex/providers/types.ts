@@ -61,13 +61,42 @@ export type NormalizedDevice = {
   timezone?: string;
 };
 
-export type QingpingWebhookItem = {
-  mac?: string;
-  data?: QingpingDeviceData;
+export type QingpingSignature = {
+  signature: string;
+  timestamp: number;
+  token: string;
 };
 
-export type QingpingWebhookPayload = {
-  data?: QingpingWebhookItem[];
-  devices?: QingpingWebhookItem[];
-  device_data?: QingpingWebhookItem[];
+export type QingpingWebhookInfo = {
+  mac: string;
+  sn?: string;
+  product: {
+    id: number;
+    desc: string;
+  };
+  name: string;
+  version?: string;
+  created_at?: number;
+};
+
+export type QingpingWebhookEvent = {
+  data: QingpingDeviceData;
+  alert_config?: {
+    metric_name: string;
+    operator: "gt" | "lt";
+    threshold: number;
+  };
+  status?: number;
+};
+
+export type QingpingWebhookBody = {
+  signature: QingpingSignature;
+  payload: {
+    info: QingpingWebhookInfo;
+    metadata?: {
+      data_type: "realtime" | "history";
+    };
+    data: QingpingDeviceData[];
+    events?: QingpingWebhookEvent[];
+  };
 };
