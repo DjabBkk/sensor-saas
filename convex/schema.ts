@@ -62,9 +62,28 @@ export default defineSchema({
     .index("by_userId_and_provider", ["userId", "provider"]),
 
   embedTokens: defineTable({
+    userId: v.id("users"),
     deviceId: v.id("devices"),
     token: v.string(),
+    label: v.optional(v.string()),
+    isRevoked: v.boolean(),
     createdAt: v.number(),
-    expiresAt: v.optional(v.number()),
-  }).index("by_token", ["token"]),
+  })
+    .index("by_token", ["token"])
+    .index("by_deviceId", ["deviceId"])
+    .index("by_userId", ["userId"]),
+
+  kioskConfigs: defineTable({
+    userId: v.id("users"),
+    token: v.string(),
+    label: v.optional(v.string()),
+    mode: v.union(v.literal("single"), v.literal("multi")),
+    deviceIds: v.array(v.id("devices")),
+    theme: v.union(v.literal("dark"), v.literal("light")),
+    refreshInterval: v.number(),
+    isRevoked: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_token", ["token"])
+    .index("by_userId", ["userId"]),
 });

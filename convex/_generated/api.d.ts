@@ -81,6 +81,123 @@ export declare const api: {
       null
     >;
   };
+  embedTokens: {
+    create: FunctionReference<
+      "mutation",
+      "public",
+      { deviceId: Id<"devices">; label?: string; userId: Id<"users"> },
+      {
+        _creationTime: number;
+        _id: Id<"embedTokens">;
+        createdAt: number;
+        deviceId: Id<"devices">;
+        isRevoked: boolean;
+        label?: string;
+        token: string;
+        userId: Id<"users">;
+      }
+    >;
+    listForDevice: FunctionReference<
+      "query",
+      "public",
+      { deviceId: Id<"devices"> },
+      Array<{
+        _creationTime: number;
+        _id: Id<"embedTokens">;
+        createdAt: number;
+        deviceId: Id<"devices">;
+        isRevoked: boolean;
+        label?: string;
+        token: string;
+        userId: Id<"users">;
+      }>
+    >;
+    listForUser: FunctionReference<
+      "query",
+      "public",
+      { userId: Id<"users"> },
+      Array<{
+        _creationTime: number;
+        _id: Id<"embedTokens">;
+        createdAt: number;
+        deviceId: Id<"devices">;
+        isRevoked: boolean;
+        label?: string;
+        token: string;
+        userId: Id<"users">;
+      }>
+    >;
+    revoke: FunctionReference<
+      "mutation",
+      "public",
+      { tokenId: Id<"embedTokens"> },
+      null
+    >;
+  };
+  kioskConfigs: {
+    create: FunctionReference<
+      "mutation",
+      "public",
+      {
+        deviceIds: Array<Id<"devices">>;
+        label?: string;
+        mode: "single" | "multi";
+        refreshInterval: number;
+        theme: "dark" | "light";
+        userId: Id<"users">;
+      },
+      {
+        _creationTime: number;
+        _id: Id<"kioskConfigs">;
+        createdAt: number;
+        deviceIds: Array<Id<"devices">>;
+        isRevoked: boolean;
+        label?: string;
+        mode: "single" | "multi";
+        refreshInterval: number;
+        theme: "dark" | "light";
+        token: string;
+        userId: Id<"users">;
+      }
+    >;
+    listForUser: FunctionReference<
+      "query",
+      "public",
+      { userId: Id<"users"> },
+      Array<{
+        _creationTime: number;
+        _id: Id<"kioskConfigs">;
+        createdAt: number;
+        deviceIds: Array<Id<"devices">>;
+        isRevoked: boolean;
+        label?: string;
+        mode: "single" | "multi";
+        refreshInterval: number;
+        theme: "dark" | "light";
+        token: string;
+        userId: Id<"users">;
+      }>
+    >;
+    revoke: FunctionReference<
+      "mutation",
+      "public",
+      { configId: Id<"kioskConfigs"> },
+      null
+    >;
+    update: FunctionReference<
+      "mutation",
+      "public",
+      {
+        configId: Id<"kioskConfigs">;
+        deviceIds: Array<Id<"devices">>;
+        label?: string;
+        mode: "single" | "multi";
+        refreshInterval: number;
+        theme: "dark" | "light";
+      },
+      null
+    >;
+  };
   providers: {
     connect: FunctionReference<
       "mutation",
@@ -93,6 +210,99 @@ export declare const api: {
         webhookSecret?: string;
       },
       null
+    >;
+  };
+  public: {
+    getEmbedDevice: FunctionReference<
+      "query",
+      "public",
+      { refreshKey?: number; token: string },
+      null | {
+        device: {
+          _creationTime: number;
+          _id: Id<"devices">;
+          createdAt: number;
+          lastReadingAt?: number;
+          model?: string;
+          name: string;
+          provider: "qingping" | "purpleair" | "iqair" | "temtop";
+          providerDeviceId: string;
+          roomId?: Id<"rooms">;
+          timezone?: string;
+          userId: Id<"users">;
+        };
+        history: Array<{
+          _creationTime: number;
+          _id: Id<"readings">;
+          aqi?: number;
+          battery?: number;
+          co2?: number;
+          deviceId: Id<"devices">;
+          pm10?: number;
+          pm25?: number;
+          pressure?: number;
+          rh?: number;
+          tempC?: number;
+          ts: number;
+          voc?: number;
+        }>;
+        latestReading: null | {
+          _creationTime: number;
+          _id: Id<"readings">;
+          aqi?: number;
+          battery?: number;
+          co2?: number;
+          deviceId: Id<"devices">;
+          pm10?: number;
+          pm25?: number;
+          pressure?: number;
+          rh?: number;
+          tempC?: number;
+          ts: number;
+          voc?: number;
+        };
+      }
+    >;
+    getKioskConfig: FunctionReference<
+      "query",
+      "public",
+      { refreshKey?: number; token: string },
+      null | {
+        devices: Array<{
+          device: {
+            _creationTime: number;
+            _id: Id<"devices">;
+            createdAt: number;
+            lastReadingAt?: number;
+            model?: string;
+            name: string;
+            provider: "qingping" | "purpleair" | "iqair" | "temtop";
+            providerDeviceId: string;
+            roomId?: Id<"rooms">;
+            timezone?: string;
+            userId: Id<"users">;
+          };
+          latestReading: null | {
+            _creationTime: number;
+            _id: Id<"readings">;
+            aqi?: number;
+            battery?: number;
+            co2?: number;
+            deviceId: Id<"devices">;
+            pm10?: number;
+            pm25?: number;
+            pressure?: number;
+            rh?: number;
+            tempC?: number;
+            ts: number;
+            voc?: number;
+          };
+        }>;
+        label?: string;
+        mode: "single" | "multi";
+        refreshInterval: number;
+        theme: "dark" | "light";
+      }
     >;
   };
   readings: {
@@ -241,6 +451,43 @@ export declare const internal: {
         userId: Id<"users">;
       },
       Id<"devices">
+    >;
+  };
+  embedTokens: {
+    getByToken: FunctionReference<
+      "query",
+      "internal",
+      { token: string },
+      null | {
+        _creationTime: number;
+        _id: Id<"embedTokens">;
+        createdAt: number;
+        deviceId: Id<"devices">;
+        isRevoked: boolean;
+        label?: string;
+        token: string;
+        userId: Id<"users">;
+      }
+    >;
+  };
+  kioskConfigs: {
+    getByToken: FunctionReference<
+      "query",
+      "internal",
+      { token: string },
+      null | {
+        _creationTime: number;
+        _id: Id<"kioskConfigs">;
+        createdAt: number;
+        deviceIds: Array<Id<"devices">>;
+        isRevoked: boolean;
+        label?: string;
+        mode: "single" | "multi";
+        refreshInterval: number;
+        theme: "dark" | "light";
+        token: string;
+        userId: Id<"users">;
+      }
     >;
   };
   providers: {

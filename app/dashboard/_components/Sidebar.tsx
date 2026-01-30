@@ -23,6 +23,8 @@ import {
   Wind,
   Wifi,
   WifiOff,
+  Monitor,
+  Code,
 } from "lucide-react";
 
 type Device = {
@@ -48,6 +50,8 @@ type SidebarProps = {
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/history", label: "History", icon: History },
+  { href: "/dashboard/kiosk", label: "Kiosk", icon: Monitor },
+  { href: "/dashboard/widgets", label: "Widgets", icon: Code },
 ];
 
 const bottomNavItems = [

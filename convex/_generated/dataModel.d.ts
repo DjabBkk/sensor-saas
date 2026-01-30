@@ -70,8 +70,10 @@ export type DataModel = {
     document: {
       createdAt: number;
       deviceId: Id<"devices">;
-      expiresAt?: number;
+      isRevoked: boolean;
+      label?: string;
       token: string;
+      userId: Id<"users">;
       _id: Id<"embedTokens">;
       _creationTime: number;
     };
@@ -80,12 +82,51 @@ export type DataModel = {
       | "_id"
       | "createdAt"
       | "deviceId"
-      | "expiresAt"
-      | "token";
+      | "isRevoked"
+      | "label"
+      | "token"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_deviceId: ["deviceId", "_creationTime"];
+      by_token: ["token", "_creationTime"];
+      by_userId: ["userId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  kioskConfigs: {
+    document: {
+      createdAt: number;
+      deviceIds: Array<Id<"devices">>;
+      isRevoked: boolean;
+      label?: string;
+      mode: "single" | "multi";
+      refreshInterval: number;
+      theme: "dark" | "light";
+      token: string;
+      userId: Id<"users">;
+      _id: Id<"kioskConfigs">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "createdAt"
+      | "deviceIds"
+      | "isRevoked"
+      | "label"
+      | "mode"
+      | "refreshInterval"
+      | "theme"
+      | "token"
+      | "userId";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_token: ["token", "_creationTime"];
+      by_userId: ["userId", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};
