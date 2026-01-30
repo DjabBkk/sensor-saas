@@ -2,7 +2,28 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { UserButton } from "@clerk/nextjs";
+
 import { Id } from "@/convex/_generated/dataModel";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  LayoutDashboard,
+  History,
+  Settings,
+  User,
+  Plus,
+  Wind,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
 
 type Device = {
   _id: Id<"devices">;
@@ -21,9 +42,20 @@ type SidebarProps = {
   devices: Device[];
   rooms: Room[];
   userId: Id<"users">;
+  onAddDevice?: () => void;
 };
 
-export function Sidebar({ devices, rooms, userId }: SidebarProps) {
+const navItems = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard/history", label: "History", icon: History },
+];
+
+const bottomNavItems = [
+  { href: "/dashboard/settings", label: "Settings", icon: Settings },
+  { href: "/dashboard/account", label: "Account", icon: User },
+];
+
+export function Sidebar({ devices, rooms, userId, onAddDevice }: SidebarProps) {
   const pathname = usePathname();
 
   // Group devices by room
@@ -50,126 +82,184 @@ export function Sidebar({ devices, rooms, userId }: SidebarProps) {
     ...(devicesByRoom["unassigned"] ? ["unassigned"] : []),
   ];
 
-  const isActive = (deviceId: string) =>
+  const isActive = (href: string) => {
+    if (href === "/dashboard") {
+      return pathname === "/dashboard";
+    }
+    return pathname.startsWith(href);
+  };
+
+  const isDeviceActive = (deviceId: string) =>
     pathname === `/dashboard/device/${deviceId}`;
 
   return (
-    <aside className="flex w-72 flex-col border-r border-slate-800 bg-slate-900/50 backdrop-blur-sm">
-      {/* Header */}
-      <div className="border-b border-slate-800 p-6">
-        <Link href="/dashboard" className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-cyan-500">
-            <svg
-              className="h-5 w-5 text-slate-900"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2.5}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064"
-              />
-            </svg>
+    <TooltipProvider>
+      <aside className="flex w-64 flex-col border-r border-border bg-sidebar">
+        {/* Logo */}
+        <div className="flex h-14 items-center gap-3 border-b border-border px-4">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500">
+            <Wind className="h-4 w-4 text-white" />
           </div>
-          <div>
-            <h1 className="font-semibold text-slate-100">AirView</h1>
-            <p className="text-xs text-slate-500">Air Quality Monitor</p>
+          <span className="text-lg font-semibold text-foreground">AirView</span>
+        </div>
+
+        {/* Main Navigation */}
+        <nav className="flex flex-col gap-1 p-3">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.href);
+            return (
+              <Link key={item.href} href={item.href}>
+                <Button
+                  variant={active ? "secondary" : "ghost"}
+                  className="w-full justify-start gap-3"
+                  size="sm"
+                >
+                  <Icon className="h-4 w-4" />
+                  {item.label}
+                </Button>
+              </Link>
+            );
+          })}
+        </nav>
+
+        <Separator />
+
+        {/* Devices Section */}
+        <div className="flex-1 overflow-y-auto p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Devices
+            </span>
+            <Badge variant="secondary" className="text-xs">
+              {devices.length}
+            </Badge>
           </div>
-        </Link>
-      </div>
 
-      {/* Devices */}
-      <nav className="flex-1 overflow-y-auto p-4">
-        {devices.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-700 p-4 text-center">
-            <p className="text-sm text-slate-500">No devices connected</p>
-            <Link
-              href="/onboarding/connect"
-              className="mt-2 inline-block text-sm text-emerald-400 hover:text-emerald-300"
-            >
-              Connect a device →
-            </Link>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {sortedRoomIds.map((roomId) => {
-              const roomDevices = devicesByRoom[roomId];
-              if (!roomDevices?.length) return null;
+          {devices.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border p-4 text-center">
+              <p className="text-sm text-muted-foreground">No devices yet</p>
+              <Button
+                variant="link"
+                size="sm"
+                className="mt-1 h-auto p-0 text-xs"
+                onClick={onAddDevice}
+              >
+                Add your first device
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {sortedRoomIds.map((roomId) => {
+                const roomDevices = devicesByRoom[roomId];
+                if (!roomDevices?.length) return null;
 
-              const roomName =
-                roomId === "unassigned"
-                  ? "Unassigned"
-                  : roomMap[roomId] ?? "Unknown Room";
+                const roomName =
+                  roomId === "unassigned"
+                    ? "Unassigned"
+                    : roomMap[roomId] ?? "Unknown";
 
-              return (
-                <div key={roomId}>
-                  <h3 className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-slate-500">
-                    <span className="h-px flex-1 bg-slate-800" />
-                    {roomName}
-                    <span className="h-px flex-1 bg-slate-800" />
-                  </h3>
-                  <ul className="space-y-1">
-                    {roomDevices.map((device) => (
-                      <li key={device._id}>
-                        <Link
-                          href={`/dashboard/device/${device._id}`}
-                          className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all ${
-                            isActive(device._id)
-                              ? "bg-emerald-500/10 text-emerald-400"
-                              : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-                          }`}
-                        >
-                          <span
-                            className={`h-2 w-2 rounded-full ${
-                              device.lastReadingAt &&
-                              Date.now() - device.lastReadingAt < 30 * 60 * 1000
-                                ? "bg-emerald-400 shadow-lg shadow-emerald-400/50"
-                                : "bg-slate-600"
-                            }`}
-                          />
-                          <div className="flex-1 truncate">
-                            <p className="truncate text-sm font-medium">
-                              {device.name}
-                            </p>
-                            <p className="truncate text-xs text-slate-500">
-                              {device.model ?? "Qingping"}
-                            </p>
-                          </div>
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </nav>
+                return (
+                  <div key={roomId}>
+                    <span className="mb-1.5 block text-[10px] font-medium uppercase tracking-widest text-muted-foreground/70">
+                      {roomName}
+                    </span>
+                    <div className="space-y-0.5">
+                      {roomDevices.map((device) => {
+                        const isOnline =
+                          device.lastReadingAt &&
+                          Date.now() - device.lastReadingAt < 30 * 60 * 1000;
+                        const active = isDeviceActive(device._id);
 
-      {/* Footer */}
-      <div className="border-t border-slate-800 p-4">
-        <Link
-          href="/onboarding/connect"
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-800/50 px-4 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-white"
-        >
-          <svg
-            className="h-4 w-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
+                        return (
+                          <Tooltip key={device._id}>
+                            <TooltipTrigger asChild>
+                              <Link href={`/dashboard/device/${device._id}`}>
+                                <Button
+                                  variant={active ? "secondary" : "ghost"}
+                                  size="sm"
+                                  className="w-full justify-start gap-2 text-left"
+                                >
+                                  {isOnline ? (
+                                    <Wifi className="h-3 w-3 text-emerald-500" />
+                                  ) : (
+                                    <WifiOff className="h-3 w-3 text-muted-foreground" />
+                                  )}
+                                  <span className="flex-1 truncate text-xs">
+                                    {device.name}
+                                  </span>
+                                </Button>
+                              </Link>
+                            </TooltipTrigger>
+                            <TooltipContent side="right">
+                              <p>{device.model ?? "Qingping device"}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {isOnline ? "Online" : "Offline"}
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Add Device Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-4 w-full gap-2"
+            onClick={onAddDevice}
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M12 4v16m8-8H4"
-            />
-          </svg>
-          Add Device
-        </Link>
-      </div>
-    </aside>
+            <Plus className="h-4 w-4" />
+            Add Device
+          </Button>
+        </div>
+
+        <Separator />
+
+        {/* Bottom Navigation */}
+        <nav className="flex flex-col gap-1 p-3">
+          {bottomNavItems.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.href);
+            return (
+              <Link key={item.href} href={item.href}>
+                <Button
+                  variant={active ? "secondary" : "ghost"}
+                  className="w-full justify-start gap-3"
+                  size="sm"
+                >
+                  <Icon className="h-4 w-4" />
+                  {item.label}
+                </Button>
+              </Link>
+            );
+          })}
+        </nav>
+
+        <Separator />
+
+        {/* User Profile */}
+        <div className="flex items-center gap-3 p-4">
+          <UserButton
+            afterSignOutUrl="/"
+            appearance={{
+              elements: {
+                avatarBox: "h-8 w-8",
+              },
+            }}
+          />
+          <div className="flex-1 truncate">
+            <p className="truncate text-sm font-medium text-foreground">
+              My Account
+            </p>
+          </div>
+        </div>
+      </aside>
+    </TooltipProvider>
   );
 }

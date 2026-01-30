@@ -21,6 +21,17 @@ import type { GenericId as Id } from "convex/values";
  */
 export declare const api: {
   devices: {
+    addByMac: FunctionReference<
+      "mutation",
+      "public",
+      {
+        macAddress: string;
+        name: string;
+        provider: "qingping" | "purpleair" | "iqair" | "temtop";
+        userId: Id<"users">;
+      },
+      Id<"devices">
+    >;
     get: FunctionReference<
       "query",
       "public",
@@ -181,6 +192,7 @@ export declare const api: {
       "public",
       { authId: string },
       {
+        _creationTime: number;
         _id: Id<"users">;
         authId: string;
         createdAt: number;

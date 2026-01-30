@@ -132,3 +132,45 @@ export const upsertFromProvider = internalMutation({
     });
   },
 });
+
+/**
+ * Add a device by MAC address.
+ * This creates a placeholder device that will be populated when data arrives.
+ */
+export const addByMac = mutation({
+  args: {
+    userId: v.id("users"),
+    name: v.string(),
+    macAddress: v.string(),
+    provider: providerValidator,
+  },
+  returns: v.id("devices"),
+  handler: async (ctx, args) => {
+    // Check if device already exists
+    const existing = await ctx.db
+      .query("devices")
+      .withIndex("by_provider_and_providerDeviceId", (q) =>
+        q.eq("provider", args.provider).eq("providerDeviceId", args.macAddress),
+      )
+      .unique();
+
+    if (existing) {
+      // If it exists and belongs to this user, just update the name
+      if (existing.userId === args.userId) {
+        await ctx.db.patch(existing._id, { name: args.name });
+        return existing._id;
+      }
+      // If it belongs to another user, throw error
+      throw new Error("This device is already registered to another account");
+    }
+
+    // Create new device
+    return await ctx.db.insert("devices", {
+      userId: args.userId,
+      provider: args.provider,
+      providerDeviceId: args.macAddress,
+      name: args.name,
+      createdAt: Date.now(),
+    });
+  },
+});

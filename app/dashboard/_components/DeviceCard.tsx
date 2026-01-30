@@ -1,13 +1,16 @@
 "use client";
 
 import { Id } from "@/convex/_generated/dataModel";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
-  ReadingGauge,
-  getPM25Level,
-  getCO2Level,
-  getTempLevel,
-  getHumidityLevel,
-} from "./ReadingGauge";
+  Thermometer,
+  Droplets,
+  Wind,
+  Gauge,
+  Battery,
+  Activity,
+} from "lucide-react";
 
 type Reading = {
   _id: Id<"readings">;
@@ -36,42 +39,36 @@ type DeviceCardProps = {
   reading: Reading | null;
 };
 
-// Icons as components
-const PM25Icon = () => (
-  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-  </svg>
-);
+// AQI levels for PM2.5 (EPA standard)
+const getPM25Level = (value: number) => {
+  if (value <= 12) return { label: "Good", color: "text-emerald-500", variant: "default" as const };
+  if (value <= 35.4) return { label: "Moderate", color: "text-yellow-500", variant: "secondary" as const };
+  if (value <= 55.4) return { label: "Unhealthy*", color: "text-orange-500", variant: "secondary" as const };
+  if (value <= 150.4) return { label: "Unhealthy", color: "text-red-500", variant: "destructive" as const };
+  return { label: "Very Unhealthy", color: "text-purple-500", variant: "destructive" as const };
+};
 
-const CO2Icon = () => (
-  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-  </svg>
-);
+const getCO2Level = (value: number) => {
+  if (value <= 600) return { label: "Excellent", color: "text-emerald-500" };
+  if (value <= 800) return { label: "Good", color: "text-green-500" };
+  if (value <= 1000) return { label: "Moderate", color: "text-yellow-500" };
+  if (value <= 1500) return { label: "Poor", color: "text-orange-500" };
+  return { label: "Very Poor", color: "text-red-500" };
+};
 
-const TempIcon = () => (
-  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-  </svg>
-);
+const getTempLevel = (value: number) => {
+  if (value < 16) return { label: "Cold", color: "text-blue-500" };
+  if (value <= 22) return { label: "Cool", color: "text-cyan-500" };
+  if (value <= 26) return { label: "Comfortable", color: "text-emerald-500" };
+  if (value <= 30) return { label: "Warm", color: "text-yellow-500" };
+  return { label: "Hot", color: "text-red-500" };
+};
 
-const HumidityIcon = () => (
-  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
-  </svg>
-);
-
-const PM10Icon = () => (
-  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-  </svg>
-);
-
-const BatteryIcon = () => (
-  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 9v7a2 2 0 002 2h10a2 2 0 002-2V9a2 2 0 00-2-2H7a2 2 0 00-2 2zm12-2v0a2 2 0 012 2v2a2 2 0 01-2 2v0" />
-  </svg>
-);
+const getHumidityLevel = (value: number) => {
+  if (value < 30) return { label: "Too Dry", color: "text-yellow-500" };
+  if (value <= 60) return { label: "Comfortable", color: "text-emerald-500" };
+  return { label: "Too Humid", color: "text-blue-500" };
+};
 
 export function DeviceCard({ device, reading }: DeviceCardProps) {
   const lastUpdated = reading?.ts
@@ -80,90 +77,145 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
       ? new Date(device.lastReadingAt).toLocaleString()
       : "Never";
 
-  const isStale =
-    reading?.ts && Date.now() / 1000 - reading.ts > 30 * 60; // 30 minutes
+  const isStale = reading?.ts && Date.now() / 1000 - reading.ts > 30 * 60;
+  const pm25Level = reading?.pm25 !== undefined ? getPM25Level(reading.pm25) : null;
 
   return (
     <div className="space-y-6">
       {/* Device Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-100">{device.name}</h2>
-          <p className="text-sm text-slate-500">
+          <h2 className="text-2xl font-bold">{device.name}</h2>
+          <p className="text-sm text-muted-foreground">
             {device.model ?? "Qingping Air Monitor"}
           </p>
         </div>
-        <div className="text-right">
-          <div className="flex items-center gap-2">
-            {isStale ? (
-              <span className="flex items-center gap-1.5 rounded-full bg-yellow-500/10 px-3 py-1 text-xs font-medium text-yellow-400">
-                <span className="h-1.5 w-1.5 rounded-full bg-yellow-400" />
-                Stale Data
-              </span>
-            ) : reading ? (
-              <span className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-                Live
-              </span>
-            ) : null}
-          </div>
-          <p className="mt-1 text-xs text-slate-500">Updated: {lastUpdated}</p>
+        <div className="flex items-center gap-3">
+          {pm25Level && (
+            <Badge variant={pm25Level.variant}>{pm25Level.label}</Badge>
+          )}
+          {isStale ? (
+            <Badge variant="secondary" className="gap-1">
+              <Activity className="h-3 w-3" />
+              Stale
+            </Badge>
+          ) : reading ? (
+            <Badge variant="default" className="gap-1 bg-emerald-500">
+              <Activity className="h-3 w-3" />
+              Live
+            </Badge>
+          ) : null}
         </div>
       </div>
 
+      <p className="text-xs text-muted-foreground">Last updated: {lastUpdated}</p>
+
       {/* Main Readings Grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <ReadingGauge
+        <MetricCard
           label="PM2.5"
           value={reading?.pm25}
           unit="µg/m³"
-          icon={<PM25Icon />}
-          getLevel={getPM25Level}
+          icon={<Wind className="h-4 w-4" />}
+          level={reading?.pm25 !== undefined ? getPM25Level(reading.pm25) : null}
         />
-        <ReadingGauge
+        <MetricCard
           label="CO₂"
           value={reading?.co2}
           unit="ppm"
-          icon={<CO2Icon />}
-          getLevel={getCO2Level}
+          icon={<Gauge className="h-4 w-4" />}
+          level={reading?.co2 !== undefined ? getCO2Level(reading.co2) : null}
         />
-        <ReadingGauge
+        <MetricCard
           label="Temperature"
           value={reading?.tempC}
           unit="°C"
-          icon={<TempIcon />}
-          getLevel={getTempLevel}
+          icon={<Thermometer className="h-4 w-4" />}
+          level={reading?.tempC !== undefined ? getTempLevel(reading.tempC) : null}
         />
-        <ReadingGauge
+        <MetricCard
           label="Humidity"
           value={reading?.rh}
           unit="%"
-          icon={<HumidityIcon />}
-          getLevel={getHumidityLevel}
+          icon={<Droplets className="h-4 w-4" />}
+          level={reading?.rh !== undefined ? getHumidityLevel(reading.rh) : null}
         />
-        <ReadingGauge
+        <MetricCard
           label="PM10"
           value={reading?.pm10}
           unit="µg/m³"
-          icon={<PM10Icon />}
-          getLevel={getPM25Level}
+          icon={<Wind className="h-4 w-4" />}
+          level={reading?.pm10 !== undefined ? getPM25Level(reading.pm10) : null}
         />
-        <ReadingGauge
+        <MetricCard
           label="Battery"
           value={reading?.battery}
           unit="%"
-          icon={<BatteryIcon />}
+          icon={<Battery className="h-4 w-4" />}
+          level={null}
         />
       </div>
 
       {/* No Data State */}
       {!reading && (
-        <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/50 p-8 text-center">
-          <p className="text-slate-400">
-            No readings yet. Data will appear once the device syncs.
-          </p>
-        </div>
+        <Card className="border-dashed">
+          <CardContent className="flex items-center justify-center py-8">
+            <p className="text-muted-foreground">
+              No readings yet. Data will appear once the device syncs.
+            </p>
+          </CardContent>
+        </Card>
       )}
     </div>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  unit,
+  icon,
+  level,
+}: {
+  label: string;
+  value: number | undefined;
+  unit: string;
+  icon: React.ReactNode;
+  level: { label: string; color: string } | null;
+}) {
+  const hasValue = value !== undefined && value !== null;
+
+  return (
+    <Card>
+      <CardContent className="p-6">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            {icon}
+            <span className="text-sm font-medium">{label}</span>
+          </div>
+          {level && (
+            <Badge variant="secondary" className="text-xs">
+              {level.label}
+            </Badge>
+          )}
+        </div>
+        <div className="flex items-baseline gap-2">
+          {hasValue ? (
+            <>
+              <span
+                className={`text-3xl font-bold tabular-nums ${level?.color ?? "text-foreground"}`}
+              >
+                {typeof value === "number" && value % 1 !== 0
+                  ? value.toFixed(1)
+                  : value}
+              </span>
+              <span className="text-lg text-muted-foreground">{unit}</span>
+            </>
+          ) : (
+            <span className="text-2xl text-muted-foreground">--</span>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

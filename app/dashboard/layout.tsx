@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Sidebar } from "./_components/Sidebar";
+import { AddDeviceDialog } from "./_components/AddDeviceDialog";
 
 export default function DashboardLayout({
   children,
@@ -19,6 +20,7 @@ export default function DashboardLayout({
   const { user } = useUser();
   const getOrCreateUser = useMutation(api.users.getOrCreateUser);
   const [convexUserId, setConvexUserId] = useState<Id<"users"> | null>(null);
+  const [addDeviceOpen, setAddDeviceOpen] = useState(false);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -58,20 +60,26 @@ export default function DashboardLayout({
 
   if (!isLoaded || !convexUserId) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950">
-        <div className="text-slate-400">Loading...</div>
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-950">
+    <div className="flex min-h-screen">
       <Sidebar
         devices={devices ?? []}
         rooms={rooms ?? []}
         userId={convexUserId}
+        onAddDevice={() => setAddDeviceOpen(true)}
       />
       <main className="flex-1 overflow-auto">{children}</main>
+      <AddDeviceDialog
+        open={addDeviceOpen}
+        onOpenChange={setAddDeviceOpen}
+        userId={convexUserId}
+      />
     </div>
   );
 }
