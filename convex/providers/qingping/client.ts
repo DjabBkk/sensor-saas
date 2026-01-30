@@ -52,7 +52,7 @@ const apiFetch = async (accessToken: string, path: string) => {
 };
 
 export const listDevices = async (accessToken: string) => {
-  const payload = (await apiFetch(accessToken, "/v1/apis/device")) as {
+  const payload = (await apiFetch(accessToken, "/v1/apis/devices")) as {
     devices?: QingpingDevice[];
     device?: QingpingDevice[];
     data?: QingpingDevice[];
