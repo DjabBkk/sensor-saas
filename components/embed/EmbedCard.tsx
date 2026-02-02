@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatNumber, getCO2Level, getPM25Level } from "./utils";
+import { formatNumber, getCO2Level, getPM25Level, getTemperatureLevel, getHumidityLevel } from "./utils";
 
 type EmbedCardProps = {
   deviceName: string;
@@ -28,6 +28,8 @@ export function EmbedCard({
 
   const pm25Level = displayPm25 !== undefined ? getPM25Level(displayPm25) : null;
   const co2Level = displayCo2 !== undefined ? getCO2Level(displayCo2) : null;
+  const tempLevel = displayTempC !== undefined ? getTemperatureLevel(displayTempC) : null;
+  const humidityLevel = displayRh !== undefined ? getHumidityLevel(displayRh) : null;
 
   return (
     <Card className="w-full max-w-sm">
@@ -45,6 +47,9 @@ export function EmbedCard({
             {formatNumber(displayPm25)}
             <span className="ml-1 text-xs text-muted-foreground">µg/m³</span>
           </p>
+          {pm25Level && (
+            <span className={`text-xs font-medium ${pm25Level.color}`}>{pm25Level.label}</span>
+          )}
         </div>
         <div>
           <p className="text-xs text-muted-foreground">CO₂</p>
@@ -52,18 +57,27 @@ export function EmbedCard({
             {formatNumber(displayCo2)}
             <span className="ml-1 text-xs text-muted-foreground">ppm</span>
           </p>
+          {co2Level && (
+            <span className={`text-xs font-medium ${co2Level.color}`}>{co2Level.label}</span>
+          )}
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Temp</p>
-          <p className="text-lg font-medium text-foreground">
+          <p className={`text-lg font-medium ${tempLevel?.color ?? "text-foreground"}`}>
             {displayTempC !== undefined ? `${formatNumber(displayTempC, 1)}°C` : "--"}
           </p>
+          {tempLevel && (
+            <span className={`text-xs font-medium ${tempLevel.color}`}>{tempLevel.label}</span>
+          )}
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Humidity</p>
-          <p className="text-lg font-medium text-foreground">
+          <p className={`text-lg font-medium ${humidityLevel?.color ?? "text-foreground"}`}>
             {displayRh !== undefined ? `${formatNumber(displayRh)}%` : "--"}
           </p>
+          {humidityLevel && (
+            <span className={`text-xs font-medium ${humidityLevel.color}`}>{humidityLevel.label}</span>
+          )}
         </div>
       </CardContent>
     </Card>

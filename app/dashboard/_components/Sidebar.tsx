@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "convex/react";
+import { useTheme } from "next-themes";
 
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { getDeviceStatus } from "@/lib/deviceStatus";
 import {
   Tooltip,
@@ -28,6 +30,8 @@ import {
   Monitor,
   Code,
   ChevronRight,
+  Sun,
+  Moon,
 } from "lucide-react";
 
 type Device = {
@@ -202,6 +206,11 @@ export function Sidebar({ devices, rooms, userId, onAddDevice }: SidebarProps) {
 
         <Separator />
 
+        {/* Theme Toggle */}
+        <ThemeToggle />
+
+        <Separator />
+
         {/* Bottom Navigation */}
         <nav className="flex flex-col gap-1 p-3">
           {bottomNavItems.map((item) => {
@@ -223,6 +232,30 @@ export function Sidebar({ devices, rooms, userId, onAddDevice }: SidebarProps) {
         </nav>
       </aside>
     </TooltipProvider>
+  );
+}
+
+// Theme Toggle Component
+function ThemeToggle() {
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
+
+  return (
+    <div className="flex items-center justify-between px-4 py-3">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        {isDark ? (
+          <Moon className="h-4 w-4" />
+        ) : (
+          <Sun className="h-4 w-4" />
+        )}
+        <span>{isDark ? "Dark" : "Light"} Mode</span>
+      </div>
+      <Switch
+        checked={isDark}
+        onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
+        aria-label="Toggle theme"
+      />
+    </div>
   );
 }
 

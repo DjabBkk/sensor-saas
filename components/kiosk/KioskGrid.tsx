@@ -1,4 +1,4 @@
-import { formatNumber, getCO2Level, getPM25Level } from "@/components/embed/utils";
+import { formatNumber, getCO2Level, getPM25Level, getTemperatureLevel, getHumidityLevel } from "@/components/embed/utils";
 
 type KioskGridItem = {
   deviceId: string;
@@ -32,6 +32,8 @@ export function KioskGrid({ devices }: KioskGridProps) {
 
         const pm25Level = displayPm25 !== undefined ? getPM25Level(displayPm25) : null;
         const co2Level = displayCo2 !== undefined ? getCO2Level(displayCo2) : null;
+        const tempLevel = displayTempC !== undefined ? getTemperatureLevel(displayTempC) : null;
+        const humidityLevel = displayRh !== undefined ? getHumidityLevel(displayRh) : null;
 
         return (
           <div
@@ -58,24 +60,36 @@ export function KioskGrid({ devices }: KioskGridProps) {
                 <p className={`text-3xl font-bold ${pm25Level?.color ?? "text-foreground"}`}>
                   {formatNumber(displayPm25)}
                 </p>
+                {pm25Level && (
+                  <span className={`text-xs font-medium ${pm25Level.color}`}>{pm25Level.label}</span>
+                )}
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">CO₂</p>
                 <p className={`text-3xl font-bold ${co2Level?.color ?? "text-foreground"}`}>
                   {formatNumber(displayCo2)}
                 </p>
+                {co2Level && (
+                  <span className={`text-xs font-medium ${co2Level.color}`}>{co2Level.label}</span>
+                )}
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Temp</p>
-                <p className="text-2xl font-semibold text-foreground">
+                <p className={`text-2xl font-semibold ${tempLevel?.color ?? "text-foreground"}`}>
                   {displayTempC !== undefined ? `${formatNumber(displayTempC, 1)}°C` : "--"}
                 </p>
+                {tempLevel && (
+                  <span className={`text-xs font-medium ${tempLevel.color}`}>{tempLevel.label}</span>
+                )}
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Humidity</p>
-                <p className="text-2xl font-semibold text-foreground">
+                <p className={`text-2xl font-semibold ${humidityLevel?.color ?? "text-foreground"}`}>
                   {displayRh !== undefined ? `${formatNumber(displayRh)}%` : "--"}
                 </p>
+                {humidityLevel && (
+                  <span className={`text-xs font-medium ${humidityLevel.color}`}>{humidityLevel.label}</span>
+                )}
               </div>
             </div>
           </div>

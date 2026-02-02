@@ -4,6 +4,15 @@ import { Id } from "@/convex/_generated/dataModel";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getDeviceStatus } from "@/lib/deviceStatus";
+import { RadialGauge } from "@/components/ui/radial-gauge";
+import {
+  getPM25Level,
+  getPM10Level,
+  getCO2Level,
+  getTemperatureLevel,
+  getHumidityLevel,
+  getBatteryLevel,
+} from "@/lib/aqi-levels";
 import {
   Thermometer,
   Droplets,
@@ -43,35 +52,11 @@ type DeviceCardProps = {
   reading: Reading | null;
 };
 
-// AQI levels for PM2.5 (EPA standard)
-const getPM25Level = (value: number) => {
-  if (value <= 12) return { label: "Good", color: "text-emerald-500", variant: "default" as const };
-  if (value <= 35.4) return { label: "Moderate", color: "text-yellow-500", variant: "secondary" as const };
-  if (value <= 55.4) return { label: "Unhealthy*", color: "text-orange-500", variant: "secondary" as const };
-  if (value <= 150.4) return { label: "Unhealthy", color: "text-red-500", variant: "destructive" as const };
-  return { label: "Very Unhealthy", color: "text-purple-500", variant: "destructive" as const };
-};
-
-const getCO2Level = (value: number) => {
-  if (value <= 600) return { label: "Excellent", color: "text-emerald-500" };
-  if (value <= 800) return { label: "Good", color: "text-green-500" };
-  if (value <= 1000) return { label: "Moderate", color: "text-yellow-500" };
-  if (value <= 1500) return { label: "Poor", color: "text-orange-500" };
-  return { label: "Very Poor", color: "text-red-500" };
-};
-
-const getTempLevel = (value: number) => {
-  if (value < 16) return { label: "Cold", color: "text-blue-500" };
-  if (value <= 22) return { label: "Cool", color: "text-cyan-500" };
-  if (value <= 26) return { label: "Comfortable", color: "text-emerald-500" };
-  if (value <= 30) return { label: "Warm", color: "text-yellow-500" };
-  return { label: "Hot", color: "text-red-500" };
-};
-
-const getHumidityLevel = (value: number) => {
-  if (value < 30) return { label: "Too Dry", color: "text-yellow-500" };
-  if (value <= 60) return { label: "Comfortable", color: "text-emerald-500" };
-  return { label: "Too Humid", color: "text-blue-500" };
+// Get badge variant based on AQI level
+const getAQIBadgeVariant = (label: string): "default" | "secondary" | "destructive" => {
+  if (label === "Good" || label === "Excellent") return "default";
+  if (label === "Moderate" || label === "Cool" || label === "Comfortable") return "secondary";
+  return "destructive";
 };
 
 function getOfflineReasonLabel(
@@ -120,6 +105,7 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
 
   const pm25Level =
     displayReading?.pm25 !== undefined ? getPM25Level(displayReading.pm25) : null;
+  const pm25BadgeVariant = pm25Level ? getAQIBadgeVariant(pm25Level.label) : "secondary";
   
   const offlineReasonLabel = getOfflineReasonLabel(status.offlineReason);
 
@@ -135,7 +121,7 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
         </div>
         <div className="flex items-center gap-3">
           {pm25Level && (
-            <Badge variant={pm25Level.variant}>{pm25Level.label}</Badge>
+            <Badge variant={pm25BadgeVariant}>{pm25Level.label}</Badge>
           )}
           {status.isOnline ? (
             <Badge variant="default" className="gap-1 bg-emerald-500 hover:bg-emerald-600">
@@ -153,9 +139,9 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
 
       <p className="text-xs text-muted-foreground">Last reading: {lastUpdated}</p>
 
-      {/* Main Readings Grid */}
+      {/* Main Readings Grid with Radial Gauges */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <MetricCard
+        <RadialGauge
           label="PM2.5"
           value={displayReading?.pm25}
           unit="µg/m³"
@@ -166,7 +152,7 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
               : null
           }
         />
-        <MetricCard
+        <RadialGauge
           label="CO₂"
           value={displayReading?.co2}
           unit="ppm"
@@ -177,18 +163,18 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
               : null
           }
         />
-        <MetricCard
+        <RadialGauge
           label="Temperature"
           value={displayReading?.tempC}
           unit="°C"
           icon={<Thermometer className="h-4 w-4" />}
           level={
             displayReading?.tempC !== undefined
-              ? getTempLevel(displayReading.tempC)
+              ? getTemperatureLevel(displayReading.tempC)
               : null
           }
         />
-        <MetricCard
+        <RadialGauge
           label="Humidity"
           value={displayReading?.rh}
           unit="%"
@@ -199,23 +185,27 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
               : null
           }
         />
-        <MetricCard
+        <RadialGauge
           label="PM10"
           value={displayReading?.pm10}
           unit="µg/m³"
           icon={<Wind className="h-4 w-4" />}
           level={
             displayReading?.pm10 !== undefined
-              ? getPM25Level(displayReading.pm10)
+              ? getPM10Level(displayReading.pm10)
               : null
           }
         />
-        <MetricCard
+        <RadialGauge
           label="Battery"
           value={displayReading?.battery}
           unit="%"
           icon={<Battery className="h-4 w-4" />}
-          level={null}
+          level={
+            displayReading?.battery !== undefined
+              ? getBatteryLevel(displayReading.battery)
+              : null
+          }
         />
       </div>
 
@@ -233,52 +223,3 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
   );
 }
 
-function MetricCard({
-  label,
-  value,
-  unit,
-  icon,
-  level,
-}: {
-  label: string;
-  value: number | undefined;
-  unit: string;
-  icon: React.ReactNode;
-  level: { label: string; color: string } | null;
-}) {
-  const hasValue = value !== undefined && value !== null;
-
-  return (
-    <Card>
-      <CardContent className="p-6">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            {icon}
-            <span className="text-sm font-medium">{label}</span>
-          </div>
-          {level && (
-            <Badge variant="secondary" className="text-xs">
-              {level.label}
-            </Badge>
-          )}
-        </div>
-        <div className="flex items-baseline gap-2">
-          {hasValue ? (
-            <>
-              <span
-                className={`text-3xl font-bold tabular-nums ${level?.color ?? "text-foreground"}`}
-              >
-                {typeof value === "number" && value % 1 !== 0
-                  ? value.toFixed(1)
-                  : value}
-              </span>
-              <span className="text-lg text-muted-foreground">{unit}</span>
-            </>
-          ) : (
-            <span className="text-2xl text-muted-foreground">--</span>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
