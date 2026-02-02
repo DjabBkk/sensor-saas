@@ -436,6 +436,7 @@ export declare const api: {
       "public",
       { authId: string },
       null | {
+        _creationTime: number;
         _id: Id<"users">;
         authId: string;
         createdAt: number;

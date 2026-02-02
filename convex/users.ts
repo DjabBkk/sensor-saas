@@ -48,6 +48,7 @@ export const getCurrentUser = query({
     v.null(),
     v.object({
       _id: v.id("users"),
+      _creationTime: v.number(),
       authId: v.string(),
       email: v.string(),
       name: v.optional(v.string()),

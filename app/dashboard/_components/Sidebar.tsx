@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { UserButton } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
 
 import { api } from "@/convex/_generated/api";
@@ -28,6 +27,7 @@ import {
   WifiOff,
   Monitor,
   Code,
+  ChevronRight,
 } from "lucide-react";
 
 type Device = {
@@ -221,25 +221,6 @@ export function Sidebar({ devices, rooms, userId, onAddDevice }: SidebarProps) {
             );
           })}
         </nav>
-
-        <Separator />
-
-        {/* User Profile */}
-        <div className="flex items-center gap-3 p-4">
-          <UserButton
-            afterSignOutUrl="/"
-            appearance={{
-              elements: {
-                avatarBox: "h-8 w-8",
-              },
-            }}
-          />
-          <div className="flex-1 truncate">
-            <p className="truncate text-sm font-medium text-foreground">
-              My Account
-            </p>
-          </div>
-        </div>
       </aside>
     </TooltipProvider>
   );
@@ -271,7 +252,7 @@ function DeviceSidebarItem({
           <Button
             variant={isActive ? "secondary" : "ghost"}
             size="sm"
-            className="w-full justify-start gap-2 text-left"
+            className="group w-full justify-start gap-2 text-left"
           >
             {status.isOnline ? (
               <Wifi className="h-3 w-3 text-emerald-500" />
@@ -279,6 +260,7 @@ function DeviceSidebarItem({
               <WifiOff className="h-3 w-3 text-muted-foreground" />
             )}
             <span className="flex-1 truncate text-xs">{device.name}</span>
+            <ChevronRight className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
           </Button>
         </Link>
       </TooltipTrigger>

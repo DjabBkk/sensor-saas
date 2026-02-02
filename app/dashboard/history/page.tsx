@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import {
@@ -63,37 +63,25 @@ export default function HistoryPage() {
     convexUserId ? { userId: convexUserId } : "skip"
   );
 
-  // Get stable first device ID
-  const firstDeviceId = useMemo(() => devices?.[0]?._id ?? null, [devices?.[0]?._id]);
-  
-  // Get stable device IDs string for comparison
-  const deviceIdsString = useMemo(
-    () => devices?.map((d) => d._id).join(",") ?? "",
-    [devices?.map((d) => d._id).join(",")]
-  );
-
-  // Auto-select first device
+  // Auto-select first device only once when devices load
   useEffect(() => {
-    if (!firstDeviceId) {
-      hasInitialized.current = false;
-      return;
-    }
+    if (hasInitialized.current) return;
+    if (!devices || devices.length === 0) return;
     
-    // If no device selected, select the first one
-    if (!selectedDeviceId && !hasInitialized.current) {
-      setSelectedDeviceId(firstDeviceId);
+    const firstDevice = devices[0];
+    if (firstDevice) {
+      setSelectedDeviceId(firstDevice._id);
       hasInitialized.current = true;
-      return;
     }
-    
-    // If selected device no longer exists, select first one
-    if (selectedDeviceId && deviceIdsString && !deviceIdsString.includes(selectedDeviceId)) {
-      setSelectedDeviceId(firstDeviceId);
-    }
-  }, [firstDeviceId, selectedDeviceId, deviceIdsString]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [devices]);
 
   const selectedRange = TIME_RANGES.find((r) => r.value === timeRange);
-  const startTs = Date.now() - (selectedRange?.ms ?? 24 * 60 * 60 * 1000);
+  
+  // Memoize startTs to prevent infinite re-renders from Date.now() changing
+  const startTs = useMemo(() => {
+    return Date.now() - (selectedRange?.ms ?? 24 * 60 * 60 * 1000);
+  }, [selectedRange?.ms]);
 
   const readings = useQuery(
     api.readings.history,
