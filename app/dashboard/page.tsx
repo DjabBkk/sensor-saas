@@ -87,24 +87,6 @@ export default function DashboardPage() {
     }
   };
 
-  useEffect(() => {
-    if (!convexUserId) return;
-
-    const interval = setInterval(async () => {
-      if (syncing) return;
-      try {
-        await syncDevices({ userId: convexUserId, provider: "qingping" });
-        setLastSyncedAt(Date.now());
-      } catch (error) {
-        if (process.env.NODE_ENV === "development") {
-          console.error("Auto-sync error:", error);
-        }
-      }
-    }, 60 * 1000);
-
-    return () => clearInterval(interval);
-  }, [convexUserId, syncDevices, syncing]);
-
   if (!convexUserId) {
     return null;
   }
@@ -326,9 +308,9 @@ function getOfflineReasonLabel(
     case "battery":
       return "Battery empty";
     case "provider":
-      return "Provider reported offline";
+      return "Disconnected";
     case "stale":
-      return "No recent data";
+      return "No readings yet";
     case "unknown":
       return "Unknown";
     default:

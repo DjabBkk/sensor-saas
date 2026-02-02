@@ -91,10 +91,8 @@ export const ingest = internalMutation({
     const devicePatch: {
       lastReadingAt: number;
       lastBattery?: number;
-      providerOffline?: boolean;
     } = {
       lastReadingAt: normalizedTs,
-      providerOffline: false,
     };
 
     if (args.battery !== undefined) {

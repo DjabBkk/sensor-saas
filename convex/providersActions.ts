@@ -290,7 +290,58 @@ export const pollAllReadings = internalAction({
         continue;
       }
 
-      const devices = await listDevices(config.accessToken);
+      // Check if token is expired or about to expire (within 5 minutes)
+      const now = Date.now();
+      let accessToken = config.accessToken;
+      
+      if (!config.tokenExpiresAt || config.tokenExpiresAt <= now + 5 * 60 * 1000) {
+        // Token expired or expiring soon, refresh it
+        if (!config.appKey || !config.appSecret) {
+          console.warn("[pollAllReadings] Token expired and no credentials available to refresh for user:", config.userId);
+          continue;
+        }
+        
+        console.log("[pollAllReadings] Token expired, refreshing for user:", config.userId);
+        const tokenResult = await getAccessToken(config.appKey, config.appSecret);
+        accessToken = tokenResult.accessToken;
+        
+        // Update the token in the database
+        await ctx.runMutation(internal.providers.updateToken, {
+          providerConfigId: config._id,
+          accessToken: tokenResult.accessToken,
+          tokenExpiresAt: tokenResult.tokenExpiresAt,
+        });
+      }
+
+      let devices;
+      try {
+        devices = await listDevices(accessToken);
+      } catch (error: any) {
+        // If we get a 401, try refreshing the token once more
+        if (error?.message?.includes("401") && config.appKey && config.appSecret) {
+          console.log("[pollAllReadings] Got 401, refreshing token and retrying for user:", config.userId);
+          const tokenResult = await getAccessToken(config.appKey, config.appSecret);
+          accessToken = tokenResult.accessToken;
+          
+          await ctx.runMutation(internal.providers.updateToken, {
+            providerConfigId: config._id,
+            accessToken: tokenResult.accessToken,
+            tokenExpiresAt: tokenResult.tokenExpiresAt,
+          });
+          
+          // Retry once
+          try {
+            devices = await listDevices(accessToken);
+          } catch (retryError) {
+            console.error("[pollAllReadings] Failed after token refresh for user:", config.userId, retryError);
+            continue;
+          }
+        } else {
+          console.error("[pollAllReadings] API error for user:", config.userId, error);
+          continue;
+        }
+      }
+
       for (const device of devices) {
         const reading = mapQingpingReading(device.data);
         if (!reading) {
@@ -332,6 +383,11 @@ export const pollAllReadings = internalAction({
           battery: reading.battery,
         });
       }
+
+      // Update last sync time
+      await ctx.runMutation(internal.providers.updateLastSync, {
+        providerConfigId: config._id,
+      });
     }
 
     return null;

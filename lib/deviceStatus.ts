@@ -2,8 +2,6 @@ export type DeviceStatusInput = {
   lastReadingAt?: number;
   lastBattery?: number;
   providerOffline?: boolean;
-  now?: number;
-  staleAfterMs?: number;
 };
 
 export type DeviceStatusResult = {
@@ -18,15 +16,12 @@ export const getDeviceStatus = ({
   lastReadingAt,
   lastBattery,
   providerOffline,
-  now = Date.now(),
-  staleAfterMs = 30 * 60 * 1000,
 }: DeviceStatusInput): DeviceStatusResult => {
   const hasReading = typeof lastReadingAt === "number";
-  const isStale = !hasReading || now - lastReadingAt > staleAfterMs;
   const isBatteryEmpty = lastBattery === 0;
   const isProviderOffline = providerOffline === true;
 
-  const isOnline = !isBatteryEmpty && !isProviderOffline && !isStale;
+  const isOnline = hasReading && !isBatteryEmpty && !isProviderOffline;
 
   let offlineReason: DeviceStatusResult["offlineReason"] = null;
   if (!isOnline) {
@@ -34,7 +29,7 @@ export const getDeviceStatus = ({
       offlineReason = "battery";
     } else if (isProviderOffline) {
       offlineReason = "provider";
-    } else if (isStale) {
+    } else if (!hasReading) {
       offlineReason = "stale";
     } else {
       offlineReason = "unknown";
@@ -43,7 +38,7 @@ export const getDeviceStatus = ({
 
   return {
     isOnline,
-    isStale,
+    isStale: !hasReading,
     isBatteryEmpty,
     isProviderOffline,
     offlineReason,

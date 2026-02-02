@@ -10,7 +10,8 @@ import {
   Wind,
   Gauge,
   Battery,
-  Activity,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 
 type Reading = {
@@ -73,6 +74,36 @@ const getHumidityLevel = (value: number) => {
   return { label: "Too Humid", color: "text-blue-500" };
 };
 
+function getOfflineReasonLabel(
+  reason: "battery" | "provider" | "stale" | "unknown" | null
+) {
+  switch (reason) {
+    case "battery":
+      return "Battery empty";
+    case "provider":
+      return "Disconnected";
+    case "stale":
+      return "No readings yet";
+    case "unknown":
+      return "Unknown";
+    default:
+      return null;
+  }
+}
+
+function formatRelativeTime(timestampMs: number) {
+  const diffMs = Date.now() - timestampMs;
+  if (diffMs < 0) return "just now";
+  const seconds = Math.floor(diffMs / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 export function DeviceCard({ device, reading }: DeviceCardProps) {
   const status = getDeviceStatus({
     lastReadingAt: reading?.ts ?? device.lastReadingAt,
@@ -82,14 +113,15 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
 
   // Show readings even when offline (so users can see last known values)
   const displayReading = reading;
-  const lastUpdated = reading?.ts
-    ? new Date(reading.ts).toLocaleString()
-    : device.lastReadingAt
-      ? new Date(device.lastReadingAt).toLocaleString()
-      : "Never";
+  const lastReadingAt = reading?.ts ?? device.lastReadingAt;
+  const lastUpdated = lastReadingAt
+    ? formatRelativeTime(lastReadingAt)
+    : "Never";
 
   const pm25Level =
     displayReading?.pm25 !== undefined ? getPM25Level(displayReading.pm25) : null;
+  
+  const offlineReasonLabel = getOfflineReasonLabel(status.offlineReason);
 
   return (
     <div className="space-y-6">
@@ -105,21 +137,21 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
           {pm25Level && (
             <Badge variant={pm25Level.variant}>{pm25Level.label}</Badge>
           )}
-          {!status.isOnline ? (
+          {status.isOnline ? (
+            <Badge variant="default" className="gap-1 bg-emerald-500 hover:bg-emerald-600">
+              <Wifi className="h-3 w-3 text-white" />
+              <span className="text-white">Online</span>
+            </Badge>
+          ) : (
             <Badge variant="secondary" className="gap-1">
-              <Activity className="h-3 w-3" />
-              Offline
+              <WifiOff className="h-3 w-3" />
+              {offlineReasonLabel ? `Offline: ${offlineReasonLabel}` : "Offline"}
             </Badge>
-          ) : displayReading ? (
-            <Badge variant="default" className="gap-1 bg-emerald-500">
-              <Activity className="h-3 w-3" />
-              Live
-            </Badge>
-          ) : null}
+          )}
         </div>
       </div>
 
-      <p className="text-xs text-muted-foreground">Last updated: {lastUpdated}</p>
+      <p className="text-xs text-muted-foreground">Last reading: {lastUpdated}</p>
 
       {/* Main Readings Grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
