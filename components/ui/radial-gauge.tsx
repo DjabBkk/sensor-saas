@@ -1,37 +1,45 @@
 "use client";
 
-import { Label, PolarRadiusAxis, RadialBar, RadialBarChart } from "recharts";
+import {
+  Label,
+  PolarGrid,
+  PolarRadiusAxis,
+  RadialBar,
+  RadialBarChart,
+} from "recharts";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 import type { AQILevel } from "@/lib/aqi-levels";
+import { cn } from "@/lib/utils";
 
 type RadialGaugeProps = {
   label: string;
   value: number | undefined;
   unit: string;
-  icon?: React.ReactNode;
   level: AQILevel | null;
   maxValue?: number;
+  showLabel?: boolean;
 };
 
 export function RadialGauge({
   label,
   value,
   unit,
-  icon,
   level,
   maxValue = 100,
+  showLabel = true,
 }: RadialGaugeProps) {
   const hasValue = value !== undefined && value !== null;
-  
-  // Calculate the fill percentage for the gauge
+
+  // Calculate the fill percentage for the gauge (0-250 degrees)
   const fillPercentage = level?.percentage ?? 0;
-  const remainingPercentage = 100 - fillPercentage;
+  // Convert percentage to angle (250 degrees max)
+  const endAngle = (fillPercentage / 100) * 250;
 
   const chartData = [
     {
       name: label,
       value: fillPercentage,
-      remaining: remainingPercentage,
+      fill: level?.fillColor ?? "var(--muted)",
     },
   ];
 
@@ -40,177 +48,57 @@ export function RadialGauge({
       label: label,
       color: level?.fillColor ?? "var(--muted)",
     },
-    remaining: {
-      label: "Remaining",
-      color: "var(--muted)",
-    },
   } satisfies ChartConfig;
 
   const displayValue = hasValue
     ? typeof value === "number" && value % 1 !== 0
       ? value.toFixed(1)
-      : value
-    : "--";
-
-  return (
-    <div className="relative flex flex-col items-center rounded-xl border border-border bg-card p-4 transition-all duration-200 shadow-[var(--card-shadow)] hover:shadow-[var(--card-shadow-hover)]">
-      {/* Header */}
-      <div className="mb-2 flex w-full items-center justify-between">
-        <div className="flex items-center gap-2 text-muted-foreground">
-          {icon}
-          <span className="text-sm font-medium">{label}</span>
-        </div>
-        {level && (
-          <span
-            className={`rounded-full px-2 py-0.5 text-xs font-medium ${level.color} bg-muted`}
-          >
-            {level.label}
-          </span>
-        )}
-      </div>
-
-      {/* Radial Chart */}
-      <ChartContainer
-        config={chartConfig}
-        className="mx-auto aspect-square w-full max-w-[180px]"
-      >
-        <RadialBarChart
-          data={chartData}
-          startAngle={180}
-          endAngle={0}
-          innerRadius={60}
-          outerRadius={90}
-        >
-          <defs>
-            {/* AQI gradient using design system colors */}
-            <linearGradient id={`gradient-${label}`} x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="var(--aqi-excellent)" />
-              <stop offset="20%" stopColor="var(--aqi-good)" />
-              <stop offset="40%" stopColor="var(--aqi-moderate)" />
-              <stop offset="60%" stopColor="var(--aqi-poor)" />
-              <stop offset="80%" stopColor="var(--aqi-unhealthy)" />
-              <stop offset="100%" stopColor="var(--aqi-hazardous)" />
-            </linearGradient>
-          </defs>
-          <PolarRadiusAxis tick={false} tickLine={false} axisLine={false}>
-            <Label
-              content={({ viewBox }) => {
-                if (viewBox && "cx" in viewBox && "cy" in viewBox) {
-                  return (
-                    <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle">
-                      <tspan
-                        x={viewBox.cx}
-                        y={(viewBox.cy || 0) - 8}
-                        className={`fill-current text-2xl font-bold ${level?.color ?? "text-foreground"}`}
-                      >
-                        {displayValue}
-                      </tspan>
-                      <tspan
-                        x={viewBox.cx}
-                        y={(viewBox.cy || 0) + 12}
-                        className="fill-muted-foreground text-sm"
-                      >
-                        {unit}
-                      </tspan>
-                    </text>
-                  );
-                }
-              }}
-            />
-          </PolarRadiusAxis>
-          {/* Background track */}
-          <RadialBar
-            dataKey="remaining"
-            stackId="a"
-            cornerRadius={5}
-            fill="var(--muted)"
-            className="stroke-transparent stroke-2"
-          />
-          {/* Value bar with status color */}
-          <RadialBar
-            dataKey="value"
-            stackId="a"
-            cornerRadius={5}
-            fill={level?.fillColor ?? "var(--muted)"}
-            className="stroke-transparent stroke-2"
-          />
-        </RadialBarChart>
-      </ChartContainer>
-    </div>
-  );
-}
-
-/**
- * Compact version of the radial gauge for smaller displays
- */
-export function RadialGaugeCompact({
-  label,
-  value,
-  unit,
-  level,
-}: Omit<RadialGaugeProps, "icon" | "maxValue">) {
-  const hasValue = value !== undefined && value !== null;
-  
-  const fillPercentage = level?.percentage ?? 0;
-  const remainingPercentage = 100 - fillPercentage;
-
-  const chartData = [
-    {
-      name: label,
-      value: fillPercentage,
-      remaining: remainingPercentage,
-    },
-  ];
-
-  const chartConfig = {
-    value: {
-      label: label,
-      color: level?.fillColor ?? "var(--muted)",
-    },
-    remaining: {
-      label: "Remaining",
-      color: "var(--muted)",
-    },
-  } satisfies ChartConfig;
-
-  const displayValue = hasValue
-    ? typeof value === "number" && value % 1 !== 0
-      ? value.toFixed(1)
-      : value
+      : Math.round(value as number)
     : "--";
 
   return (
     <div className="flex flex-col items-center">
       <ChartContainer
         config={chartConfig}
-        className="mx-auto aspect-square w-full max-w-[120px]"
+        className="mx-auto aspect-square w-full max-w-[140px]"
       >
         <RadialBarChart
           data={chartData}
-          startAngle={180}
-          endAngle={0}
-          innerRadius={40}
-          outerRadius={55}
+          startAngle={0}
+          endAngle={endAngle}
+          innerRadius={45}
+          outerRadius={65}
         >
+          <PolarGrid
+            gridType="circle"
+            radialLines={false}
+            stroke="none"
+            className="first:fill-muted last:fill-background"
+            polarRadius={[50, 40]}
+          />
+          <RadialBar
+            dataKey="value"
+            background
+            cornerRadius={10}
+            fill={level?.fillColor ?? "var(--muted)"}
+          />
           <PolarRadiusAxis tick={false} tickLine={false} axisLine={false}>
             <Label
               content={({ viewBox }) => {
                 if (viewBox && "cx" in viewBox && "cy" in viewBox) {
                   return (
-                    <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle">
+                    <text
+                      x={viewBox.cx}
+                      y={viewBox.cy}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                    >
                       <tspan
                         x={viewBox.cx}
-                        y={(viewBox.cy || 0) - 4}
-                        className={`fill-current text-lg font-bold ${level?.color ?? "text-foreground"}`}
+                        y={viewBox.cy}
+                        className="fill-foreground text-2xl font-bold"
                       >
                         {displayValue}
-                      </tspan>
-                      <tspan
-                        x={viewBox.cx}
-                        y={(viewBox.cy || 0) + 10}
-                        className="fill-muted-foreground text-xs"
-                      >
-                        {unit}
                       </tspan>
                     </text>
                   );
@@ -218,26 +106,236 @@ export function RadialGaugeCompact({
               }}
             />
           </PolarRadiusAxis>
-          <RadialBar
-            dataKey="remaining"
-            stackId="a"
-            cornerRadius={4}
-            fill="var(--muted)"
-            className="stroke-transparent stroke-2"
+        </RadialBarChart>
+      </ChartContainer>
+      {showLabel && (
+        <div className="mt-1 text-center">
+          <p className="text-xs text-muted-foreground">
+            {label}
+          </p>
+          {level && (
+            <p className={`text-xs font-medium ${level.color}`}>
+              {level.label}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Compact inline version for dashboard cards - shows gauge + metric side by side
+ */
+export function RadialGaugeInline({
+  label,
+  value,
+  unit,
+  level,
+}: Omit<RadialGaugeProps, "maxValue" | "showLabel">) {
+  const hasValue = value !== undefined && value !== null;
+
+  const fillPercentage = level?.percentage ?? 0;
+  const endAngle = (fillPercentage / 100) * 250;
+
+  const chartData = [
+    {
+      name: label,
+      value: fillPercentage,
+      fill: level?.fillColor ?? "var(--muted)",
+    },
+  ];
+
+  const chartConfig = {
+    value: {
+      label: label,
+      color: level?.fillColor ?? "var(--muted)",
+    },
+  } satisfies ChartConfig;
+
+  const displayValue = hasValue
+    ? typeof value === "number" && value % 1 !== 0
+      ? value.toFixed(1)
+      : Math.round(value as number)
+    : "--";
+
+  return (
+    <div className="flex items-center gap-3">
+      <ChartContainer
+        config={chartConfig}
+        className="aspect-square w-[72px] h-[72px] flex-shrink-0"
+      >
+        <RadialBarChart
+          data={chartData}
+          startAngle={0}
+          endAngle={endAngle}
+          innerRadius={26}
+          outerRadius={36}
+        >
+          <PolarGrid
+            gridType="circle"
+            radialLines={false}
+            stroke="none"
+            className="first:fill-muted last:fill-background"
+            polarRadius={[32, 22]}
           />
           <RadialBar
             dataKey="value"
-            stackId="a"
-            cornerRadius={4}
+            background
+            cornerRadius={8}
             fill={level?.fillColor ?? "var(--muted)"}
-            className="stroke-transparent stroke-2"
           />
+          <PolarRadiusAxis tick={false} tickLine={false} axisLine={false}>
+            <Label
+              content={({ viewBox }) => {
+                if (viewBox && "cx" in viewBox && "cy" in viewBox) {
+                  return (
+                    <text
+                      x={viewBox.cx}
+                      y={viewBox.cy}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                    >
+                      <tspan
+                        x={viewBox.cx}
+                        y={viewBox.cy}
+                        className="fill-foreground text-sm font-bold"
+                      >
+                        {displayValue}
+                      </tspan>
+                    </text>
+                  );
+                }
+              }}
+            />
+          </PolarRadiusAxis>
         </RadialBarChart>
       </ChartContainer>
-      <div className="mt-1 text-center">
-        <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <div className="flex flex-col gap-0.5">
+        <span className="text-base font-medium text-foreground">{label}</span>
         {level && (
-          <p className={`text-xs font-medium ${level.color}`}>{level.label}</p>
+          <span className={`text-sm font-medium ${level.color}`}>
+            {level.label}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Card version of the radial gauge for device detail pages - clickable/toggleable
+ */
+type RadialGaugeCardProps = Omit<RadialGaugeProps, "maxValue" | "showLabel"> & {
+  selected?: boolean;
+  onClick?: () => void;
+  color?: string;
+};
+
+export function RadialGaugeCard({
+  label,
+  value,
+  unit,
+  level,
+  selected = false,
+  onClick,
+  color,
+}: RadialGaugeCardProps) {
+  const hasValue = value !== undefined && value !== null;
+
+  const fillPercentage = level?.percentage ?? 0;
+  const endAngle = (fillPercentage / 100) * 250;
+
+  const fillColor = color ?? level?.fillColor ?? "var(--muted)";
+
+  const chartData = [
+    {
+      name: label,
+      value: fillPercentage,
+      fill: fillColor,
+    },
+  ];
+
+  const chartConfig = {
+    value: {
+      label: label,
+      color: fillColor,
+    },
+  } satisfies ChartConfig;
+
+  const displayValue = hasValue
+    ? typeof value === "number" && value % 1 !== 0
+      ? value.toFixed(1)
+      : Math.round(value as number)
+    : "--";
+
+  return (
+    <div
+      className={cn(
+        "flex flex-col items-center rounded-xl border bg-card p-4 transition-all duration-200 shadow-[var(--card-shadow)] hover:shadow-[var(--card-shadow-hover)] cursor-pointer",
+        selected
+          ? "border-primary ring-2 ring-primary/20"
+          : "border-border hover:border-primary/50"
+      )}
+      onClick={onClick}
+    >
+      <ChartContainer
+        config={chartConfig}
+        className="mx-auto aspect-square w-full max-w-[100px]"
+      >
+        <RadialBarChart
+          data={chartData}
+          startAngle={0}
+          endAngle={endAngle}
+          innerRadius={30}
+          outerRadius={45}
+        >
+          <PolarGrid
+            gridType="circle"
+            radialLines={false}
+            stroke="none"
+            className="first:fill-muted last:fill-background"
+            polarRadius={[38, 28]}
+          />
+          <RadialBar
+            dataKey="value"
+            background
+            cornerRadius={8}
+            fill={fillColor}
+          />
+          <PolarRadiusAxis tick={false} tickLine={false} axisLine={false}>
+            <Label
+              content={({ viewBox }) => {
+                if (viewBox && "cx" in viewBox && "cy" in viewBox) {
+                  return (
+                    <text
+                      x={viewBox.cx}
+                      y={viewBox.cy}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                    >
+                      <tspan
+                        x={viewBox.cx}
+                        y={viewBox.cy}
+                        className="fill-foreground text-lg font-bold"
+                      >
+                        {displayValue}
+                      </tspan>
+                    </text>
+                  );
+                }
+              }}
+            />
+          </PolarRadiusAxis>
+        </RadialBarChart>
+      </ChartContainer>
+      <div className="mt-2 text-center">
+        <p className="text-sm font-medium text-foreground">{label}</p>
+        <p className="text-xs text-muted-foreground">{unit}</p>
+        {level && (
+          <p className={`mt-1 text-xs font-medium ${level.color}`}>
+            {level.label}
+          </p>
         )}
       </div>
     </div>

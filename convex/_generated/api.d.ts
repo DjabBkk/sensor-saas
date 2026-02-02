@@ -32,6 +32,12 @@ export declare const api: {
       },
       Id<"devices">
     >;
+    deleteDevice: FunctionReference<
+      "mutation",
+      "public",
+      { deviceId: Id<"devices"> },
+      null
+    >;
     forceClaimDevice: FunctionReference<
       "mutation",
       "public",
@@ -49,6 +55,7 @@ export declare const api: {
         _creationTime: number;
         _id: Id<"devices">;
         createdAt: number;
+        hiddenMetrics?: Array<string>;
         lastBattery?: number;
         lastReadingAt?: number;
         model?: string;
@@ -69,6 +76,7 @@ export declare const api: {
         _creationTime: number;
         _id: Id<"devices">;
         createdAt: number;
+        hiddenMetrics?: Array<string>;
         lastBattery?: number;
         lastReadingAt?: number;
         model?: string;
@@ -85,6 +93,12 @@ export declare const api: {
       "mutation",
       "public",
       { deviceId: Id<"devices">; name: string },
+      null
+    >;
+    updateHiddenMetrics: FunctionReference<
+      "mutation",
+      "public",
+      { deviceId: Id<"devices">; hiddenMetrics: Array<string> },
       null
     >;
     updateRoom: FunctionReference<

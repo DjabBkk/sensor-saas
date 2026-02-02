@@ -29,6 +29,7 @@ export default defineSchema({
     lastReadingAt: v.optional(v.number()),
     lastBattery: v.optional(v.number()),
     providerOffline: v.optional(v.boolean()),
+    hiddenMetrics: v.optional(v.array(v.string())),
     createdAt: v.number(),
   })
     .index("by_userId", ["userId"])

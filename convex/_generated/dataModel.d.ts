@@ -30,6 +30,7 @@ export type DataModel = {
   devices: {
     document: {
       createdAt: number;
+      hiddenMetrics?: Array<string>;
       lastBattery?: number;
       lastReadingAt?: number;
       model?: string;
@@ -47,6 +48,7 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "createdAt"
+      | "hiddenMetrics"
       | "lastBattery"
       | "lastReadingAt"
       | "model"

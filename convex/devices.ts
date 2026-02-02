@@ -16,6 +16,7 @@ const deviceShape = v.object({
   lastReadingAt: v.optional(v.number()),
   lastBattery: v.optional(v.number()),
   providerOffline: v.optional(v.boolean()),
+  hiddenMetrics: v.optional(v.array(v.string())),
   createdAt: v.number(),
 });
 
@@ -64,6 +65,47 @@ export const rename = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     await ctx.db.patch(args.deviceId, { name: args.name });
+    return null;
+  },
+});
+
+export const updateHiddenMetrics = mutation({
+  args: {
+    deviceId: v.id("devices"),
+    hiddenMetrics: v.array(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.deviceId, { hiddenMetrics: args.hiddenMetrics });
+    return null;
+  },
+});
+
+export const deleteDevice = mutation({
+  args: {
+    deviceId: v.id("devices"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const readings = await ctx.db
+      .query("readings")
+      .withIndex("by_deviceId", (q) => q.eq("deviceId", args.deviceId))
+      .collect();
+
+    for (const reading of readings) {
+      await ctx.db.delete(reading._id);
+    }
+
+    const embedTokens = await ctx.db
+      .query("embedTokens")
+      .withIndex("by_deviceId", (q) => q.eq("deviceId", args.deviceId))
+      .collect();
+
+    for (const token of embedTokens) {
+      await ctx.db.delete(token._id);
+    }
+
+    await ctx.db.delete(args.deviceId);
     return null;
   },
 });

@@ -10,10 +10,10 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { getDeviceStatus } from "@/lib/deviceStatus";
-import { getPM25Level, getCO2Level } from "./_components/ReadingGauge";
-import { Plus, Wifi, WifiOff, ChevronRight } from "lucide-react";
+import { getPM25Level, getCO2Level } from "@/lib/aqi-levels";
+import { RadialGaugeInline } from "@/components/ui/radial-gauge";
+import { Plus, ChevronRight } from "lucide-react";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -151,7 +151,7 @@ export default function DashboardPage() {
   );
 }
 
-// Mini device card for the overview
+// Mini device card for the overview - name on top, gauges below
 function DeviceOverviewCard({
   device,
 }: {
@@ -180,108 +180,53 @@ function DeviceOverviewCard({
   const co2Level =
     displayReading?.co2 !== undefined ? getCO2Level(displayReading.co2) : null;
 
-  const offlineReasonLabel = getOfflineReasonLabel(status.offlineReason);
-  const lastReadingLabel = lastReadingAt
-    ? `Last reading: ${formatRelativeTime(lastReadingAt)}`
-    : "Last reading: never";
-
   return (
     <Link href={`/dashboard/device/${device._id}`}>
-      <Card className="group relative overflow-hidden transition-all hover:shadow-lg">
-        <CardContent className="p-6">
-          {/* Header */}
-          <div className="mb-4 flex items-start justify-between">
+      <Card className="group relative overflow-hidden transition-all hover:shadow-lg w-fit">
+        <CardContent className="pl-6 pr-8 pt-5 pb-5">
+          {/* Top: Device name, model, and status */}
+          <div className="flex items-start justify-between mb-4">
             <div>
-              <h3 className="font-semibold group-hover:text-primary">
-                {device.name}
-              </h3>
-              <p className="text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-bold group-hover:text-primary">
+                  {device.name}
+                </h3>
+                {/* Status dot */}
+                <span
+                  className={`h-2.5 w-2.5 rounded-full ${
+                    status.isOnline ? "bg-emerald-500" : "bg-red-500"
+                  }`}
+                  title={status.isOnline ? "Online" : "Offline"}
+                />
+              </div>
+              <p className="text-sm text-muted-foreground mt-0.5">
                 {device.model ?? "Qingping"}
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">{lastReadingLabel}</p>
             </div>
-            <Badge
-              variant={status.isOnline ? "default" : "secondary"}
-              className={`gap-1 ${status.isOnline ? "bg-emerald-500 hover:bg-emerald-600" : ""}`}
-            >
-              {status.isOnline ? (
-                <>
-                  <Wifi className="h-3 w-3 text-white" />
-                  <span className="text-white">Online</span>
-                </>
-              ) : (
-                <>
-                  <WifiOff className="h-3 w-3" />
-                  {offlineReasonLabel ? `Offline: ${offlineReasonLabel}` : "Offline"}
-                </>
-              )}
-            </Badge>
+            <ChevronRight className="h-5 w-5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 ml-4" />
           </div>
 
-          {/* Key Metrics */}
+          {/* Bottom: Radial gauges - left aligned */}
           {displayReading ? (
-            <div className="grid grid-cols-2 gap-4">
-              {/* PM2.5 */}
-              <div>
-                <p className="text-xs text-muted-foreground">PM2.5</p>
-                <p
-                  className={`text-2xl font-bold ${pm25Level?.color ?? "text-foreground"}`}
-                >
-                  {displayReading.pm25 ?? "--"}
-                  <span className="ml-1 text-sm font-normal text-muted-foreground">
-                    µg/m³
-                  </span>
-                </p>
-              </div>
-              {/* CO2 */}
-              <div>
-                <p className="text-xs text-muted-foreground">CO₂</p>
-                <p
-                  className={`text-2xl font-bold ${co2Level?.color ?? "text-foreground"}`}
-                >
-                  {displayReading.co2 ?? "--"}
-                  <span className="ml-1 text-sm font-normal text-muted-foreground">
-                    ppm
-                  </span>
-                </p>
-              </div>
-              {/* Temperature */}
-              <div>
-                <p className="text-xs text-muted-foreground">Temp</p>
-                <p className="text-lg font-semibold">
-                  {displayReading.tempC !== undefined ? `${displayReading.tempC}°C` : "--"}
-                </p>
-              </div>
-              {/* Humidity */}
-              <div>
-                <p className="text-xs text-muted-foreground">Humidity</p>
-                <p className="text-lg font-semibold">
-                  {displayReading.rh !== undefined ? `${displayReading.rh}%` : "--"}
-                </p>
-              </div>
-              {/* Battery */}
-              <div>
-                <p className="text-xs text-muted-foreground">Battery</p>
-                <p className="text-lg font-semibold">
-                  {device.lastBattery !== undefined
-                    ? `${device.lastBattery}%`
-                    : displayReading?.battery !== undefined
-                      ? `${displayReading.battery}%`
-                      : "--"}
-                </p>
-              </div>
+            <div className="flex items-center justify-start gap-6">
+              <RadialGaugeInline
+                label="PM2.5"
+                value={displayReading.pm25}
+                unit="µg/m³"
+                level={pm25Level}
+              />
+              <RadialGaugeInline
+                label="CO₂"
+                value={displayReading.co2}
+                unit="ppm"
+                level={co2Level}
+              />
             </div>
           ) : (
-            <div className="py-4 text-center text-sm text-muted-foreground">
+            <div className="py-4 text-sm text-muted-foreground">
               No readings yet
             </div>
           )}
-
-          {/* View Details Arrow */}
-          <div className="mt-4 flex items-center justify-end text-xs text-muted-foreground group-hover:text-primary">
-            View details
-            <ChevronRight className="ml-1 h-3 w-3 transition-transform group-hover:translate-x-1" />
-          </div>
         </CardContent>
       </Card>
     </Link>
@@ -299,21 +244,4 @@ function formatRelativeTime(timestampMs: number) {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
-}
-
-function getOfflineReasonLabel(
-  reason: "battery" | "provider" | "stale" | "unknown" | null
-) {
-  switch (reason) {
-    case "battery":
-      return "Battery empty";
-    case "provider":
-      return "Disconnected";
-    case "stale":
-      return "No readings yet";
-    case "unknown":
-      return "Unknown";
-    default:
-      return null;
-  }
 }
