@@ -7,10 +7,12 @@ const kioskConfigShape = v.object({
   userId: v.id("users"),
   token: v.string(),
   label: v.optional(v.string()),
+  title: v.optional(v.string()),
   mode: v.union(v.literal("single"), v.literal("multi")),
   deviceIds: v.array(v.id("devices")),
   theme: v.union(v.literal("dark"), v.literal("light")),
   refreshInterval: v.number(),
+  visibleMetrics: v.optional(v.array(v.string())),
   isRevoked: v.boolean(),
   createdAt: v.number(),
 });
@@ -37,10 +39,12 @@ export const create = mutation({
   args: {
     userId: v.id("users"),
     label: v.optional(v.string()),
+    title: v.optional(v.string()),
     mode: v.union(v.literal("single"), v.literal("multi")),
     deviceIds: v.array(v.id("devices")),
     theme: v.union(v.literal("dark"), v.literal("light")),
     refreshInterval: v.number(),
+    visibleMetrics: v.optional(v.array(v.string())),
   },
   returns: kioskConfigShape,
   handler: async (ctx, args) => {
@@ -68,10 +72,12 @@ export const create = mutation({
       userId: args.userId,
       token,
       label: args.label,
+      title: args.title,
       mode: args.mode,
       deviceIds: args.deviceIds,
       theme: args.theme,
       refreshInterval: args.refreshInterval,
+      visibleMetrics: args.visibleMetrics,
       isRevoked: false,
       createdAt: Date.now(),
     });
@@ -88,19 +94,23 @@ export const update = mutation({
   args: {
     configId: v.id("kioskConfigs"),
     label: v.optional(v.string()),
+    title: v.optional(v.string()),
     mode: v.union(v.literal("single"), v.literal("multi")),
     deviceIds: v.array(v.id("devices")),
     theme: v.union(v.literal("dark"), v.literal("light")),
     refreshInterval: v.number(),
+    visibleMetrics: v.optional(v.array(v.string())),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     await ctx.db.patch(args.configId, {
       label: args.label,
+      title: args.title,
       mode: args.mode,
       deviceIds: args.deviceIds,
       theme: args.theme,
       refreshInterval: args.refreshInterval,
+      visibleMetrics: args.visibleMetrics,
     });
     return null;
   },

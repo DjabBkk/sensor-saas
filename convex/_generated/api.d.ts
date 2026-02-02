@@ -177,7 +177,9 @@ export declare const api: {
         mode: "single" | "multi";
         refreshInterval: number;
         theme: "dark" | "light";
+        title?: string;
         userId: Id<"users">;
+        visibleMetrics?: Array<string>;
       },
       {
         _creationTime: number;
@@ -189,8 +191,10 @@ export declare const api: {
         mode: "single" | "multi";
         refreshInterval: number;
         theme: "dark" | "light";
+        title?: string;
         token: string;
         userId: Id<"users">;
+        visibleMetrics?: Array<string>;
       }
     >;
     listForUser: FunctionReference<
@@ -207,8 +211,10 @@ export declare const api: {
         mode: "single" | "multi";
         refreshInterval: number;
         theme: "dark" | "light";
+        title?: string;
         token: string;
         userId: Id<"users">;
+        visibleMetrics?: Array<string>;
       }>
     >;
     revoke: FunctionReference<
@@ -227,6 +233,8 @@ export declare const api: {
         mode: "single" | "multi";
         refreshInterval: number;
         theme: "dark" | "light";
+        title?: string;
+        visibleMetrics?: Array<string>;
       },
       null
     >;
@@ -359,6 +367,8 @@ export declare const api: {
         mode: "single" | "multi";
         refreshInterval: number;
         theme: "dark" | "light";
+        title?: string;
+        visibleMetrics?: Array<string>;
       }
     >;
   };
@@ -567,8 +577,10 @@ export declare const internal: {
         mode: "single" | "multi";
         refreshInterval: number;
         theme: "dark" | "light";
+        title?: string;
         token: string;
         userId: Id<"users">;
+        visibleMetrics?: Array<string>;
       }
     >;
   };

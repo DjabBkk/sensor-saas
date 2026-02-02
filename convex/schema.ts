@@ -82,10 +82,12 @@ export default defineSchema({
     userId: v.id("users"),
     token: v.string(),
     label: v.optional(v.string()),
+    title: v.optional(v.string()),
     mode: v.union(v.literal("single"), v.literal("multi")),
     deviceIds: v.array(v.id("devices")),
     theme: v.union(v.literal("dark"), v.literal("light")),
     refreshInterval: v.number(),
+    visibleMetrics: v.optional(v.array(v.string())),
     isRevoked: v.boolean(),
     createdAt: v.number(),
   })

@@ -140,8 +140,10 @@ export type DataModel = {
       mode: "single" | "multi";
       refreshInterval: number;
       theme: "dark" | "light";
+      title?: string;
       token: string;
       userId: Id<"users">;
+      visibleMetrics?: Array<string>;
       _id: Id<"kioskConfigs">;
       _creationTime: number;
     };
@@ -155,8 +157,10 @@ export type DataModel = {
       | "mode"
       | "refreshInterval"
       | "theme"
+      | "title"
       | "token"
-      | "userId";
+      | "userId"
+      | "visibleMetrics";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
