@@ -175,8 +175,28 @@ export const addByMac = mutation({
         await ctx.db.patch(existing._id, { name: args.name });
         return existing._id;
       }
-      // If it belongs to another user, throw error
-      throw new Error("This device is already registered to another account");
+      
+      // Check if the previous owner's account still exists
+      // If the user document is deleted, the device is orphaned and can be claimed
+      const previousOwner = await ctx.db.get(existing.userId);
+      
+      if (previousOwner) {
+        // User still exists, device is not orphaned
+        throw new Error("This device is already registered to another account");
+      }
+      
+      // Previous owner's account was deleted - clean up the orphaned device
+      const readings = await ctx.db
+        .query("readings")
+        .withIndex("by_deviceId", (q) => q.eq("deviceId", existing._id))
+        .collect();
+      
+      for (const reading of readings) {
+        await ctx.db.delete(reading._id);
+      }
+      
+      // Delete the orphaned device
+      await ctx.db.delete(existing._id);
     }
 
     // Create new device
@@ -187,5 +207,46 @@ export const addByMac = mutation({
       name: args.name,
       createdAt: Date.now(),
     });
+  },
+});
+
+/**
+ * Force claim a device by deleting it from any previous owner.
+ * WARNING: This is a destructive operation for development/admin use only.
+ * It will delete the device and all its readings, allowing re-registration.
+ */
+export const forceClaimDevice = mutation({
+  args: {
+    macAddress: v.string(),
+    provider: providerValidator,
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("devices")
+      .withIndex("by_provider_and_providerDeviceId", (q) =>
+        q.eq("provider", args.provider).eq("providerDeviceId", args.macAddress),
+      )
+      .unique();
+
+    if (!existing) {
+      // Device doesn't exist, nothing to do
+      return null;
+    }
+
+    // Delete all readings for this device
+    const readings = await ctx.db
+      .query("readings")
+      .withIndex("by_deviceId", (q) => q.eq("deviceId", existing._id))
+      .collect();
+
+    for (const reading of readings) {
+      await ctx.db.delete(reading._id);
+    }
+
+    // Delete the device
+    await ctx.db.delete(existing._id);
+
+    return null;
   },
 });

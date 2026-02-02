@@ -45,16 +45,15 @@ export const getCurrentUser = query({
     authId: v.string(),
   },
   returns: v.union(
+    v.null(),
     v.object({
       _id: v.id("users"),
-      _creationTime: v.number(),
       authId: v.string(),
       email: v.string(),
       name: v.optional(v.string()),
       plan: planValidator,
       createdAt: v.number(),
     }),
-    v.null()
   ),
   handler: async (ctx, args) => {
     const user = await ctx.db
@@ -63,5 +62,94 @@ export const getCurrentUser = query({
       .first();
 
     return user ?? null;
+  },
+});
+
+/**
+ * Delete user and all associated data.
+ * This will delete:
+ * - All devices and their readings
+ * - All rooms
+ * - All provider configs
+ * - All embed tokens
+ * - All kiosk configs
+ */
+export const deleteUser = mutation({
+  args: {
+    userId: v.id("users"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    // Verify user exists
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Delete all devices and their readings
+    const devices = await ctx.db
+      .query("devices")
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    for (const device of devices) {
+      // Delete all readings for this device
+      const readings = await ctx.db
+        .query("readings")
+        .withIndex("by_deviceId", (q) => q.eq("deviceId", device._id))
+        .collect();
+
+      for (const reading of readings) {
+        await ctx.db.delete(reading._id);
+      }
+
+      // Delete the device
+      await ctx.db.delete(device._id);
+    }
+
+    // Delete all rooms
+    const rooms = await ctx.db
+      .query("rooms")
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    for (const room of rooms) {
+      await ctx.db.delete(room._id);
+    }
+
+    // Delete all provider configs
+    const providerConfigs = await ctx.db
+      .query("providerConfigs")
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    for (const config of providerConfigs) {
+      await ctx.db.delete(config._id);
+    }
+
+    // Delete all embed tokens
+    const embedTokens = await ctx.db
+      .query("embedTokens")
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    for (const token of embedTokens) {
+      await ctx.db.delete(token._id);
+    }
+
+    // Delete all kiosk configs
+    const kioskConfigs = await ctx.db
+      .query("kioskConfigs")
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    for (const config of kioskConfigs) {
+      await ctx.db.delete(config._id);
+    }
+
+    // Finally, delete the user
+    await ctx.db.delete(args.userId);
+
+    return null;
   },
 });

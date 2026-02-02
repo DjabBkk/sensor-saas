@@ -4,9 +4,15 @@ import { useEffect, useState } from "react";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
-
+import Link from "next/link";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { CheckCircle2, Key, ExternalLink, AlertCircle, Loader2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function ConnectProviderPage() {
   const router = useRouter();
@@ -78,60 +84,160 @@ export default function ConnectProviderPage() {
       await connectProvider({
         userId: convexUserId,
         provider: "qingping",
-        appKey,
-        appSecret,
+        appKey: appKey.trim(),
+        appSecret: appSecret.trim(),
       });
       router.push("/onboarding/devices");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to connect Qingping.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to connect Qingping. Please check your credentials.",
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Connect Qingping</h1>
-        <p className="text-sm text-neutral-500">
-          Enter your Qingping App Key and App Secret to link your devices.
-        </p>
+    <div className="mx-auto flex min-h-screen max-w-3xl flex-col gap-8 p-6">
+      {/* Progress indicator */}
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Link href="/onboarding/instructions" className="hover:text-foreground">
+          Setup Guide
+        </Link>
+        <span>/</span>
+        <span className="text-foreground font-medium">Add Credentials</span>
       </div>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <label className="flex flex-col gap-2 text-sm">
-          App Key
-          <input
-            className="rounded border border-neutral-300 px-3 py-2"
-            value={appKey}
-            onChange={(event) => setAppKey(event.target.value)}
-            placeholder="Your Qingping App Key"
-            required
-          />
-        </label>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold">Connect Your Qingping Account</h1>
+          <p className="mt-2 text-muted-foreground">
+            Enter your Qingping Developer Platform credentials to sync your devices.
+          </p>
+        </div>
 
-        <label className="flex flex-col gap-2 text-sm">
-          App Secret
-          <input
-            className="rounded border border-neutral-300 px-3 py-2"
-            type="password"
-            value={appSecret}
-            onChange={(event) => setAppSecret(event.target.value)}
-            placeholder="Your Qingping App Secret"
-            required
-          />
-        </label>
+        {/* Instructions Card */}
+        <Card className="border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-900/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Key className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              Where to Find Your Credentials
+            </CardTitle>
+            <CardDescription>
+              Follow these steps if you haven't retrieved your App Key and App Secret yet.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-start gap-3 text-sm">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              <div>
+                <span className="font-medium">Step 1:</span> Create a developer account at{" "}
+                <a
+                  href="https://developer.cleargrass.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-emerald-600 hover:underline dark:text-emerald-400"
+                >
+                  developer.cleargrass.com
+                  <ExternalLink className="ml-1 inline h-3 w-3" />
+                </a>
+                {" "}using the <strong>same credentials</strong> as your Qingping+ app account
+              </div>
+            </div>
+            <div className="flex items-start gap-3 text-sm">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              <div>
+                <span className="font-medium">Step 2:</span> Go to "Developer Information
+                Management" section
+              </div>
+            </div>
+            <div className="flex items-start gap-3 text-sm">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              <div>
+                <span className="font-medium">Step 3:</span> Copy your App Key and App Secret
+              </div>
+            </div>
+            <div className="mt-4">
+              <Link href="/onboarding/instructions">
+                <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                  View Full Setup Guide
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
 
-        {error ? <p className="text-sm text-red-600">{error}</p> : null}
+        {/* Form Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Enter Your Credentials</CardTitle>
+            <CardDescription>
+              Your credentials are stored securely and only used to access your devices.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="appKey">App Key</Label>
+                <Input
+                  id="appKey"
+                  placeholder="Enter your App Key"
+                  value={appKey}
+                  onChange={(e) => setAppKey(e.target.value)}
+                  disabled={isSubmitting}
+                  required
+                />
+              </div>
 
-        <button
-          type="submit"
-          className="rounded bg-black px-4 py-2 text-white disabled:opacity-50"
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? "Connecting..." : "Connect Qingping"}
-        </button>
-      </form>
+              <div className="space-y-2">
+                <Label htmlFor="appSecret">App Secret</Label>
+                <Input
+                  id="appSecret"
+                  type="password"
+                  placeholder="Enter your App Secret"
+                  value={appSecret}
+                  onChange={(e) => setAppSecret(e.target.value)}
+                  disabled={isSubmitting}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  Your credentials are encrypted and stored securely.
+                </p>
+              </div>
+
+              {error && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              <div className="flex gap-3 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.back()}
+                  disabled={isSubmitting}
+                >
+                  Back
+                </Button>
+                <Button type="submit" disabled={isSubmitting} className="flex-1">
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Connecting...
+                    </>
+                  ) : (
+                    "Connect & Sync Devices"
+                  )}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

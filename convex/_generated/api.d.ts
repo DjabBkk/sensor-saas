@@ -32,6 +32,15 @@ export declare const api: {
       },
       Id<"devices">
     >;
+    forceClaimDevice: FunctionReference<
+      "mutation",
+      "public",
+      {
+        macAddress: string;
+        provider: "qingping" | "purpleair" | "iqair" | "temtop";
+      },
+      null
+    >;
     get: FunctionReference<
       "query",
       "public",
@@ -416,19 +425,24 @@ export declare const api: {
     >;
   };
   users: {
+    deleteUser: FunctionReference<
+      "mutation",
+      "public",
+      { userId: Id<"users"> },
+      null
+    >;
     getCurrentUser: FunctionReference<
       "query",
       "public",
       { authId: string },
-      {
-        _creationTime: number;
+      null | {
         _id: Id<"users">;
         authId: string;
         createdAt: number;
         email: string;
         name?: string;
         plan: "free" | "basic" | "pro" | "team";
-      } | null
+      }
     >;
     getOrCreateUser: FunctionReference<
       "mutation",
