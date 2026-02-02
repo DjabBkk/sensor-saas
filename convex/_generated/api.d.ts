@@ -68,6 +68,12 @@ export declare const api: {
         userId: Id<"users">;
       }
     >;
+    hasQingpingDevice: FunctionReference<
+      "query",
+      "public",
+      { userId: Id<"users"> },
+      boolean
+    >;
     list: FunctionReference<
       "query",
       "public",
@@ -237,6 +243,15 @@ export declare const api: {
         webhookSecret?: string;
       },
       null
+    >;
+    hasProviderCredentials: FunctionReference<
+      "query",
+      "public",
+      {
+        provider: "qingping" | "purpleair" | "iqair" | "temtop";
+        userId: Id<"users">;
+      },
+      boolean
     >;
   };
   providersActions: {

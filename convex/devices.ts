@@ -34,6 +34,20 @@ export const list = query({
   },
 });
 
+export const hasQingpingDevice = query({
+  args: {
+    userId: v.id("users"),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const devices = await ctx.db
+      .query("devices")
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .collect();
+    return devices.some((device) => device.provider === "qingping");
+  },
+});
+
 export const get = query({
   args: {
     deviceId: v.id("devices"),

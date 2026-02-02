@@ -14,6 +14,7 @@ import { getDeviceStatus } from "@/lib/deviceStatus";
 import { getPM25Level, getCO2Level } from "@/lib/aqi-levels";
 import { RadialGaugeInline } from "@/components/ui/radial-gauge";
 import { Plus, ChevronRight } from "lucide-react";
+import { useAddDeviceDialog } from "./_components/add-device-context";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -21,6 +22,7 @@ export default function DashboardPage() {
   const { user } = useUser();
   const getOrCreateUser = useMutation(api.users.getOrCreateUser);
   const syncDevices = useAction(api.providersActions.syncDevicesForUserPublic);
+  const { openDialog } = useAddDeviceDialog();
   const [convexUserId, setConvexUserId] = useState<Id<"users"> | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
@@ -129,11 +131,11 @@ export default function DashboardPage() {
             </div>
             <h2 className="text-xl font-semibold">No devices connected</h2>
             <p className="mt-2 max-w-sm text-muted-foreground">
-              Connect your first Qingping air quality monitor to start tracking
-              your indoor air quality.
+              Connect your first air quality monitor to start tracking your
+              indoor air quality.
             </p>
-            <Button asChild className="mt-6">
-              <Link href="/onboarding/connect">Connect Device</Link>
+            <Button className="mt-6" onClick={openDialog}>
+              Connect Device
             </Button>
           </CardContent>
         </Card>
