@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/tooltip";
 import {
   LayoutDashboard,
-  History,
+  Cpu,
   Settings,
   User,
   Plus,
@@ -58,7 +58,7 @@ type SidebarProps = {
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/dashboard/history", label: "History", icon: History },
+  { href: "/dashboard/devices", label: "Devices", icon: Cpu },
   { href: "/dashboard/kiosk", label: "Kiosk", icon: Monitor },
   { href: "/dashboard/widgets", label: "Widgets", icon: Code },
 ];
