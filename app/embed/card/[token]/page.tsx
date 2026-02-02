@@ -4,6 +4,7 @@ import { useEffect, useState, use } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { getDeviceStatus } from "@/lib/deviceStatus";
 import { EmbedCard } from "@/components/embed/EmbedCard";
 
 export default function EmbedCardPage({
@@ -43,14 +44,26 @@ export default function EmbedCardPage({
   return (
     <div className={theme === "dark" ? "dark" : ""}>
       <div className="flex min-h-screen items-center justify-center bg-background p-6 text-foreground">
+        {(() => {
+          const status = getDeviceStatus({
+            lastReadingAt: data.device.lastReadingAt,
+            lastBattery: data.device.lastBattery,
+            providerOffline: data.device.providerOffline,
+          });
+          const reading = status.isOnline ? data.latestReading : null;
+
+          return (
         <EmbedCard
           deviceName={data.device.name}
           model={data.device.model ?? undefined}
-          pm25={data.latestReading?.pm25}
-          co2={data.latestReading?.co2}
-          tempC={data.latestReading?.tempC}
-          rh={data.latestReading?.rh}
+          isOnline={status.isOnline}
+          pm25={reading?.pm25}
+          co2={reading?.co2}
+          tempC={reading?.tempC}
+          rh={reading?.rh}
         />
+          );
+        })()}
       </div>
     </div>
   );

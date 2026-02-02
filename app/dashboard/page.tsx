@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth, useUser } from "@clerk/nextjs";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -11,6 +11,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { getDeviceStatus } from "@/lib/deviceStatus";
 import { getPM25Level, getCO2Level } from "./_components/ReadingGauge";
 import { Plus, Wifi, WifiOff, ChevronRight } from "lucide-react";
 
@@ -19,7 +20,11 @@ export default function DashboardPage() {
   const { isLoaded, userId } = useAuth();
   const { user } = useUser();
   const getOrCreateUser = useMutation(api.users.getOrCreateUser);
+  const syncDevices = useAction(api.providersActions.syncDevicesForUserPublic);
   const [convexUserId, setConvexUserId] = useState<Id<"users"> | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -53,6 +58,53 @@ export default function DashboardPage() {
     convexUserId ? { userId: convexUserId } : "skip"
   );
 
+  const handleSyncNow = async () => {
+    if (!convexUserId || syncing) return;
+    setSyncing(true);
+    setSyncMessage(null);
+
+    try {
+      await syncDevices({ userId: convexUserId, provider: "qingping" });
+      setLastSyncedAt(Date.now());
+      setSyncMessage("Sync completed. Updating device status...");
+      // Clear success message after 3 seconds
+      setTimeout(() => setSyncMessage(null), 3000);
+    } catch (error: any) {
+      // Check if it's a "function not found" error (Convex dev still syncing)
+      const errorMessage = error?.message || String(error);
+      if (errorMessage.includes("Could not find public function") || 
+          errorMessage.includes("Did you forget to run")) {
+        setSyncMessage("Sync function not ready yet. Please wait a moment and try again.");
+      } else {
+        setSyncMessage("Sync failed. Please check your provider connection.");
+      }
+      // Don't log to console in production - only in dev
+      if (process.env.NODE_ENV === "development") {
+        console.error("Sync error:", error);
+      }
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!convexUserId) return;
+
+    const interval = setInterval(async () => {
+      if (syncing) return;
+      try {
+        await syncDevices({ userId: convexUserId, provider: "qingping" });
+        setLastSyncedAt(Date.now());
+      } catch (error) {
+        if (process.env.NODE_ENV === "development") {
+          console.error("Auto-sync error:", error);
+        }
+      }
+    }, 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [convexUserId, syncDevices, syncing]);
+
   if (!convexUserId) {
     return null;
   }
@@ -60,11 +112,30 @@ export default function DashboardPage() {
   return (
     <div className="p-8">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="mt-1 text-muted-foreground">
-          Overview of your air quality monitors
-        </p>
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Dashboard</h1>
+          <p className="mt-1 text-muted-foreground">
+            Overview of your air quality monitors
+          </p>
+        </div>
+        <div className="flex flex-col items-start gap-2 sm:items-end">
+          <Button
+            variant="outline"
+            onClick={handleSyncNow}
+            disabled={syncing}
+          >
+            {syncing ? "Syncing..." : "Sync now"}
+          </Button>
+          {lastSyncedAt && (
+            <span className="text-xs text-muted-foreground">
+              Last synced: {formatRelativeTime(lastSyncedAt)}
+            </span>
+          )}
+          {syncMessage && (
+            <span className="text-xs text-muted-foreground">{syncMessage}</span>
+          )}
+        </div>
       </div>
 
       {/* Empty State */}
@@ -107,17 +178,30 @@ function DeviceOverviewCard({
     name: string;
     model?: string;
     lastReadingAt?: number;
+    lastBattery?: number;
+    providerOffline?: boolean;
   };
 }) {
   const reading = useQuery(api.readings.latest, { deviceId: device._id });
 
-  const pm25Level =
-    reading?.pm25 !== undefined ? getPM25Level(reading.pm25) : null;
-  const co2Level =
-    reading?.co2 !== undefined ? getCO2Level(reading.co2) : null;
+  const lastReadingAt = reading?.ts ?? device.lastReadingAt;
+  const status = getDeviceStatus({
+    lastReadingAt,
+    lastBattery: device.lastBattery,
+    providerOffline: device.providerOffline,
+  });
 
-  const isOnline =
-    device.lastReadingAt && Date.now() - device.lastReadingAt < 30 * 60 * 1000;
+  // Show readings even when offline (so users can see last known values)
+  const displayReading = reading;
+  const pm25Level =
+    displayReading?.pm25 !== undefined ? getPM25Level(displayReading.pm25) : null;
+  const co2Level =
+    displayReading?.co2 !== undefined ? getCO2Level(displayReading.co2) : null;
+
+  const offlineReasonLabel = getOfflineReasonLabel(status.offlineReason);
+  const lastReadingLabel = lastReadingAt
+    ? `Last reading: ${formatRelativeTime(lastReadingAt)}`
+    : "Last reading: never";
 
   return (
     <Link href={`/dashboard/device/${device._id}`}>
@@ -132,24 +216,28 @@ function DeviceOverviewCard({
               <p className="text-xs text-muted-foreground">
                 {device.model ?? "Qingping"}
               </p>
+              <p className="mt-1 text-xs text-muted-foreground">{lastReadingLabel}</p>
             </div>
-            <Badge variant={isOnline ? "default" : "secondary"} className="gap-1">
-              {isOnline ? (
+            <Badge
+              variant={status.isOnline ? "default" : "secondary"}
+              className={`gap-1 ${status.isOnline ? "bg-emerald-500 hover:bg-emerald-600" : ""}`}
+            >
+              {status.isOnline ? (
                 <>
-                  <Wifi className="h-3 w-3" />
-                  Online
+                  <Wifi className="h-3 w-3 text-white" />
+                  <span className="text-white">Online</span>
                 </>
               ) : (
                 <>
                   <WifiOff className="h-3 w-3" />
-                  Offline
+                  {offlineReasonLabel ? `Offline: ${offlineReasonLabel}` : "Offline"}
                 </>
               )}
             </Badge>
           </div>
 
           {/* Key Metrics */}
-          {reading ? (
+          {displayReading ? (
             <div className="grid grid-cols-2 gap-4">
               {/* PM2.5 */}
               <div>
@@ -157,7 +245,7 @@ function DeviceOverviewCard({
                 <p
                   className={`text-2xl font-bold ${pm25Level?.color ?? "text-foreground"}`}
                 >
-                  {reading.pm25 ?? "--"}
+                  {displayReading.pm25 ?? "--"}
                   <span className="ml-1 text-sm font-normal text-muted-foreground">
                     µg/m³
                   </span>
@@ -169,7 +257,7 @@ function DeviceOverviewCard({
                 <p
                   className={`text-2xl font-bold ${co2Level?.color ?? "text-foreground"}`}
                 >
-                  {reading.co2 ?? "--"}
+                  {displayReading.co2 ?? "--"}
                   <span className="ml-1 text-sm font-normal text-muted-foreground">
                     ppm
                   </span>
@@ -179,14 +267,25 @@ function DeviceOverviewCard({
               <div>
                 <p className="text-xs text-muted-foreground">Temp</p>
                 <p className="text-lg font-semibold">
-                  {reading.tempC !== undefined ? `${reading.tempC}°C` : "--"}
+                  {displayReading.tempC !== undefined ? `${displayReading.tempC}°C` : "--"}
                 </p>
               </div>
               {/* Humidity */}
               <div>
                 <p className="text-xs text-muted-foreground">Humidity</p>
                 <p className="text-lg font-semibold">
-                  {reading.rh !== undefined ? `${reading.rh}%` : "--"}
+                  {displayReading.rh !== undefined ? `${displayReading.rh}%` : "--"}
+                </p>
+              </div>
+              {/* Battery */}
+              <div>
+                <p className="text-xs text-muted-foreground">Battery</p>
+                <p className="text-lg font-semibold">
+                  {device.lastBattery !== undefined
+                    ? `${device.lastBattery}%`
+                    : displayReading?.battery !== undefined
+                      ? `${displayReading.battery}%`
+                      : "--"}
                 </p>
               </div>
             </div>
@@ -205,4 +304,34 @@ function DeviceOverviewCard({
       </Card>
     </Link>
   );
+}
+
+function formatRelativeTime(timestampMs: number) {
+  const diffMs = Date.now() - timestampMs;
+  if (diffMs < 0) return "just now";
+  const seconds = Math.floor(diffMs / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function getOfflineReasonLabel(
+  reason: "battery" | "provider" | "stale" | "unknown" | null
+) {
+  switch (reason) {
+    case "battery":
+      return "Battery empty";
+    case "provider":
+      return "Provider reported offline";
+    case "stale":
+      return "No recent data";
+    case "unknown":
+      return "Unknown";
+    default:
+      return null;
+  }
 }

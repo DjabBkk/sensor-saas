@@ -40,11 +40,13 @@ export declare const api: {
         _creationTime: number;
         _id: Id<"devices">;
         createdAt: number;
+        lastBattery?: number;
         lastReadingAt?: number;
         model?: string;
         name: string;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         providerDeviceId: string;
+        providerOffline?: boolean;
         roomId?: Id<"rooms">;
         timezone?: string;
         userId: Id<"users">;
@@ -58,11 +60,13 @@ export declare const api: {
         _creationTime: number;
         _id: Id<"devices">;
         createdAt: number;
+        lastBattery?: number;
         lastReadingAt?: number;
         model?: string;
         name: string;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         providerDeviceId: string;
+        providerOffline?: boolean;
         roomId?: Id<"rooms">;
         timezone?: string;
         userId: Id<"users">;
@@ -212,6 +216,17 @@ export declare const api: {
       null
     >;
   };
+  providersActions: {
+    syncDevicesForUserPublic: FunctionReference<
+      "action",
+      "public",
+      {
+        provider: "qingping" | "purpleair" | "iqair" | "temtop";
+        userId: Id<"users">;
+      },
+      null
+    >;
+  };
   public: {
     getEmbedDevice: FunctionReference<
       "query",
@@ -222,11 +237,13 @@ export declare const api: {
           _creationTime: number;
           _id: Id<"devices">;
           createdAt: number;
+          lastBattery?: number;
           lastReadingAt?: number;
           model?: string;
           name: string;
           provider: "qingping" | "purpleair" | "iqair" | "temtop";
           providerDeviceId: string;
+          providerOffline?: boolean;
           roomId?: Id<"rooms">;
           timezone?: string;
           userId: Id<"users">;
@@ -273,11 +290,13 @@ export declare const api: {
             _creationTime: number;
             _id: Id<"devices">;
             createdAt: number;
+            lastBattery?: number;
             lastReadingAt?: number;
             model?: string;
             name: string;
             provider: "qingping" | "purpleair" | "iqair" | "temtop";
             providerDeviceId: string;
+            providerOffline?: boolean;
             roomId?: Id<"rooms">;
             timezone?: string;
             userId: Id<"users">;
@@ -447,6 +466,7 @@ export declare const internal: {
         name: string;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         providerDeviceId: string;
+        providerOffline?: boolean;
         timezone?: string;
         userId: Id<"users">;
       },

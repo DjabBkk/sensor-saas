@@ -14,6 +14,8 @@ const deviceShape = v.object({
   model: v.optional(v.string()),
   timezone: v.optional(v.string()),
   lastReadingAt: v.optional(v.number()),
+  lastBattery: v.optional(v.number()),
+  providerOffline: v.optional(v.boolean()),
   createdAt: v.number(),
 });
 
@@ -102,6 +104,7 @@ export const upsertFromProvider = internalMutation({
     name: v.string(),
     model: v.optional(v.string()),
     timezone: v.optional(v.string()),
+    providerOffline: v.optional(v.boolean()),
   },
   returns: v.id("devices"),
   handler: async (ctx, args) => {
@@ -113,11 +116,22 @@ export const upsertFromProvider = internalMutation({
       .unique();
 
     if (existing) {
-      await ctx.db.patch(existing._id, {
+      const patch: {
+        name: string;
+        model?: string;
+        timezone?: string;
+        providerOffline?: boolean;
+      } = {
         name: args.name,
         model: args.model,
         timezone: args.timezone,
-      });
+      };
+
+      if (args.providerOffline !== undefined) {
+        patch.providerOffline = args.providerOffline;
+      }
+
+      await ctx.db.patch(existing._id, patch);
       return existing._id;
     }
 
@@ -128,6 +142,7 @@ export const upsertFromProvider = internalMutation({
       name: args.name,
       model: args.model,
       timezone: args.timezone,
+      providerOffline: args.providerOffline,
       createdAt: Date.now(),
     });
   },

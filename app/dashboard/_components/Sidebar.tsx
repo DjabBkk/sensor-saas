@@ -3,11 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
+import { useQuery } from "convex/react";
 
+import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { getDeviceStatus } from "@/lib/deviceStatus";
 import {
   Tooltip,
   TooltipContent,
@@ -33,6 +36,8 @@ type Device = {
   model?: string;
   roomId?: Id<"rooms">;
   lastReadingAt?: number;
+  lastBattery?: number;
+  providerOffline?: boolean;
 };
 
 type Room = {
@@ -169,41 +174,13 @@ export function Sidebar({ devices, rooms, userId, onAddDevice }: SidebarProps) {
                       {roomName}
                     </span>
                     <div className="space-y-0.5">
-                      {roomDevices.map((device) => {
-                        const isOnline =
-                          device.lastReadingAt &&
-                          Date.now() - device.lastReadingAt < 30 * 60 * 1000;
-                        const active = isDeviceActive(device._id);
-
-                        return (
-                          <Tooltip key={device._id}>
-                            <TooltipTrigger asChild>
-                              <Link href={`/dashboard/device/${device._id}`}>
-                                <Button
-                                  variant={active ? "secondary" : "ghost"}
-                                  size="sm"
-                                  className="w-full justify-start gap-2 text-left"
-                                >
-                                  {isOnline ? (
-                                    <Wifi className="h-3 w-3 text-emerald-500" />
-                                  ) : (
-                                    <WifiOff className="h-3 w-3 text-muted-foreground" />
-                                  )}
-                                  <span className="flex-1 truncate text-xs">
-                                    {device.name}
-                                  </span>
-                                </Button>
-                              </Link>
-                            </TooltipTrigger>
-                            <TooltipContent side="right">
-                              <p>{device.model ?? "Qingping device"}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {isOnline ? "Online" : "Offline"}
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        );
-                      })}
+                      {roomDevices.map((device) => (
+                        <DeviceSidebarItem
+                          key={device._id}
+                          device={device}
+                          isActive={isDeviceActive(device._id)}
+                        />
+                      ))}
                     </div>
                   </div>
                 );
@@ -265,5 +242,52 @@ export function Sidebar({ devices, rooms, userId, onAddDevice }: SidebarProps) {
         </div>
       </aside>
     </TooltipProvider>
+  );
+}
+
+// Separate component to use hooks inside map
+function DeviceSidebarItem({
+  device,
+  isActive,
+}: {
+  device: Device;
+  isActive: boolean;
+}) {
+  // Query latest reading to get most accurate status
+  const reading = useQuery(api.readings.latest, {
+    deviceId: device._id,
+  });
+  const lastReadingAt = reading?.ts ?? device.lastReadingAt;
+  const status = getDeviceStatus({
+    lastReadingAt,
+    lastBattery: device.lastBattery,
+    providerOffline: device.providerOffline,
+  });
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Link href={`/dashboard/device/${device._id}`}>
+          <Button
+            variant={isActive ? "secondary" : "ghost"}
+            size="sm"
+            className="w-full justify-start gap-2 text-left"
+          >
+            {status.isOnline ? (
+              <Wifi className="h-3 w-3 text-emerald-500" />
+            ) : (
+              <WifiOff className="h-3 w-3 text-muted-foreground" />
+            )}
+            <span className="flex-1 truncate text-xs">{device.name}</span>
+          </Button>
+        </Link>
+      </TooltipTrigger>
+      <TooltipContent side="right">
+        <p>{device.model ?? "Qingping device"}</p>
+        <p className="text-xs text-muted-foreground">
+          {status.isOnline ? "Online" : "Offline"}
+        </p>
+      </TooltipContent>
+    </Tooltip>
   );
 }

@@ -3,6 +3,7 @@
 import { Id } from "@/convex/_generated/dataModel";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { getDeviceStatus } from "@/lib/deviceStatus";
 import {
   Thermometer,
   Droplets,
@@ -32,6 +33,8 @@ type Device = {
   name: string;
   model?: string;
   lastReadingAt?: number;
+  lastBattery?: number;
+  providerOffline?: boolean;
 };
 
 type DeviceCardProps = {
@@ -71,14 +74,22 @@ const getHumidityLevel = (value: number) => {
 };
 
 export function DeviceCard({ device, reading }: DeviceCardProps) {
+  const status = getDeviceStatus({
+    lastReadingAt: reading?.ts ?? device.lastReadingAt,
+    lastBattery: device.lastBattery,
+    providerOffline: device.providerOffline,
+  });
+
+  // Show readings even when offline (so users can see last known values)
+  const displayReading = reading;
   const lastUpdated = reading?.ts
-    ? new Date(reading.ts * 1000).toLocaleString()
+    ? new Date(reading.ts).toLocaleString()
     : device.lastReadingAt
       ? new Date(device.lastReadingAt).toLocaleString()
       : "Never";
 
-  const isStale = reading?.ts && Date.now() / 1000 - reading.ts > 30 * 60;
-  const pm25Level = reading?.pm25 !== undefined ? getPM25Level(reading.pm25) : null;
+  const pm25Level =
+    displayReading?.pm25 !== undefined ? getPM25Level(displayReading.pm25) : null;
 
   return (
     <div className="space-y-6">
@@ -94,12 +105,12 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
           {pm25Level && (
             <Badge variant={pm25Level.variant}>{pm25Level.label}</Badge>
           )}
-          {isStale ? (
+          {!status.isOnline ? (
             <Badge variant="secondary" className="gap-1">
               <Activity className="h-3 w-3" />
-              Stale
+              Offline
             </Badge>
-          ) : reading ? (
+          ) : displayReading ? (
             <Badge variant="default" className="gap-1 bg-emerald-500">
               <Activity className="h-3 w-3" />
               Live
@@ -114,42 +125,62 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <MetricCard
           label="PM2.5"
-          value={reading?.pm25}
+          value={displayReading?.pm25}
           unit="µg/m³"
           icon={<Wind className="h-4 w-4" />}
-          level={reading?.pm25 !== undefined ? getPM25Level(reading.pm25) : null}
+          level={
+            displayReading?.pm25 !== undefined
+              ? getPM25Level(displayReading.pm25)
+              : null
+          }
         />
         <MetricCard
           label="CO₂"
-          value={reading?.co2}
+          value={displayReading?.co2}
           unit="ppm"
           icon={<Gauge className="h-4 w-4" />}
-          level={reading?.co2 !== undefined ? getCO2Level(reading.co2) : null}
+          level={
+            displayReading?.co2 !== undefined
+              ? getCO2Level(displayReading.co2)
+              : null
+          }
         />
         <MetricCard
           label="Temperature"
-          value={reading?.tempC}
+          value={displayReading?.tempC}
           unit="°C"
           icon={<Thermometer className="h-4 w-4" />}
-          level={reading?.tempC !== undefined ? getTempLevel(reading.tempC) : null}
+          level={
+            displayReading?.tempC !== undefined
+              ? getTempLevel(displayReading.tempC)
+              : null
+          }
         />
         <MetricCard
           label="Humidity"
-          value={reading?.rh}
+          value={displayReading?.rh}
           unit="%"
           icon={<Droplets className="h-4 w-4" />}
-          level={reading?.rh !== undefined ? getHumidityLevel(reading.rh) : null}
+          level={
+            displayReading?.rh !== undefined
+              ? getHumidityLevel(displayReading.rh)
+              : null
+          }
         />
         <MetricCard
           label="PM10"
-          value={reading?.pm10}
+          value={displayReading?.pm10}
           unit="µg/m³"
           icon={<Wind className="h-4 w-4" />}
-          level={reading?.pm10 !== undefined ? getPM25Level(reading.pm10) : null}
+          level={
+            displayReading?.pm10 !== undefined
+              ? getPM25Level(displayReading.pm10)
+              : null
+          }
         />
         <MetricCard
           label="Battery"
-          value={reading?.battery}
+          value={displayReading?.battery}
           unit="%"
           icon={<Battery className="h-4 w-4" />}
           level={null}
@@ -157,7 +188,7 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
       </div>
 
       {/* No Data State */}
-      {!reading && (
+      {!displayReading && (
         <Card className="border-dashed">
           <CardContent className="flex items-center justify-center py-8">
             <p className="text-muted-foreground">

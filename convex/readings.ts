@@ -17,6 +17,8 @@ const readingShape = v.object({
   aqi: v.optional(v.number()),
 });
 
+const normalizeTimestampMs = (ts: number) => (ts < 1e12 ? ts * 1000 : ts);
+
 export const latest = query({
   args: {
     deviceId: v.id("devices"),
@@ -71,9 +73,10 @@ export const ingest = internalMutation({
   },
   returns: v.id("readings"),
   handler: async (ctx, args) => {
+    const normalizedTs = normalizeTimestampMs(args.ts);
     const readingId = await ctx.db.insert("readings", {
       deviceId: args.deviceId,
-      ts: args.ts,
+      ts: normalizedTs,
       pm25: args.pm25,
       pm10: args.pm10,
       co2: args.co2,
@@ -85,7 +88,20 @@ export const ingest = internalMutation({
       aqi: args.aqi,
     });
 
-    await ctx.db.patch(args.deviceId, { lastReadingAt: args.ts });
+    const devicePatch: {
+      lastReadingAt: number;
+      lastBattery?: number;
+      providerOffline?: boolean;
+    } = {
+      lastReadingAt: normalizedTs,
+      providerOffline: false,
+    };
+
+    if (args.battery !== undefined) {
+      devicePatch.lastBattery = args.battery;
+    }
+
+    await ctx.db.patch(args.deviceId, devicePatch);
 
     return readingId;
   },

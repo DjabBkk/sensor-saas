@@ -30,11 +30,13 @@ export type DataModel = {
   devices: {
     document: {
       createdAt: number;
+      lastBattery?: number;
       lastReadingAt?: number;
       model?: string;
       name: string;
       provider: "qingping" | "purpleair" | "iqair" | "temtop";
       providerDeviceId: string;
+      providerOffline?: boolean;
       roomId?: Id<"rooms">;
       timezone?: string;
       userId: Id<"users">;
@@ -45,11 +47,13 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "createdAt"
+      | "lastBattery"
       | "lastReadingAt"
       | "model"
       | "name"
       | "provider"
       | "providerDeviceId"
+      | "providerOffline"
       | "roomId"
       | "timezone"
       | "userId";
