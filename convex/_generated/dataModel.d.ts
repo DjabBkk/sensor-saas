@@ -27,6 +27,35 @@ import type { GenericId } from "convex/values";
  */
 
 export type DataModel = {
+  deletedDevices: {
+    document: {
+      deletedAt: number;
+      provider: "qingping" | "purpleair" | "iqair" | "temtop";
+      providerDeviceId: string;
+      userId: Id<"users">;
+      _id: Id<"deletedDevices">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "deletedAt"
+      | "provider"
+      | "providerDeviceId"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_userId_and_provider_and_providerDeviceId: [
+        "userId",
+        "provider",
+        "providerDeviceId",
+        "_creationTime",
+      ];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   devices: {
     document: {
       createdAt: number;
@@ -248,6 +277,7 @@ export type DataModel = {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_authId: ["authId", "_creationTime"];
+      by_email: ["email", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

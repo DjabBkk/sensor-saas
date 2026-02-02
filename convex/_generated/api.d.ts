@@ -458,7 +458,15 @@ export declare const api: {
       "mutation",
       "public",
       { userId: Id<"users"> },
-      null
+      {
+        devicesDeleted: number;
+        embedTokensDeleted: number;
+        kioskConfigsDeleted: number;
+        providerConfigsDeleted: number;
+        readingsDeleted: number;
+        roomsDeleted: number;
+        userDeleted: boolean;
+      }
     >;
     getCurrentUser: FunctionReference<
       "query",
@@ -501,6 +509,16 @@ export declare const internal: {
         providerDeviceId: string;
       },
       null | { _id: Id<"devices">; userId: Id<"users"> }
+    >;
+    isDeletedForUser: FunctionReference<
+      "query",
+      "internal",
+      {
+        provider: "qingping" | "purpleair" | "iqair" | "temtop";
+        providerDeviceId: string;
+        userId: Id<"users">;
+      },
+      boolean
     >;
     upsertFromProvider: FunctionReference<
       "mutation",
@@ -685,6 +703,21 @@ export declare const internal: {
         voc?: number;
       },
       Id<"readings">
+    >;
+  };
+  users: {
+    mergeDuplicateUsers: FunctionReference<
+      "mutation",
+      "internal",
+      { email: string; keepUserId: Id<"users"> },
+      {
+        devicesTransferred: number;
+        embedTokensTransferred: number;
+        kioskConfigsTransferred: number;
+        providerConfigsTransferred: number;
+        roomsTransferred: number;
+        usersDeleted: number;
+      }
     >;
   };
 };

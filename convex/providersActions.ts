@@ -153,6 +153,18 @@ export const syncDevicesForUser = internalAction({
 
     for (const device of devices) {
       const normalized = mapQingpingDevice(device);
+      const isDeleted: boolean = await ctx.runQuery(
+        internal.devices.isDeletedForUser,
+        {
+          userId: args.userId,
+          provider: args.provider,
+          providerDeviceId: normalized.providerDeviceId,
+        },
+      );
+      if (isDeleted) {
+        continue;
+      }
+
       await ctx.runMutation(internal.devices.upsertFromProvider, {
         userId: args.userId,
         provider: args.provider,
@@ -342,7 +354,19 @@ export const pollAllReadings = internalAction({
         }
       }
 
-      for (const device of devices) {
+    for (const device of devices) {
+      const isDeleted: boolean = await ctx.runQuery(
+        internal.devices.isDeletedForUser,
+        {
+          userId: config.userId,
+          provider: config.provider,
+          providerDeviceId: device.info.mac,
+        },
+      );
+      if (isDeleted) {
+        continue;
+      }
+
         const reading = mapQingpingReading(device.data);
         if (!reading) {
           continue;

@@ -10,7 +10,9 @@ export default defineSchema({
     name: v.optional(v.string()),
     plan: planValidator,
     createdAt: v.number(),
-  }).index("by_authId", ["authId"]),
+  })
+    .index("by_authId", ["authId"])
+    .index("by_email", ["email"]),
 
   rooms: defineTable({
     userId: v.id("users"),
@@ -89,4 +91,15 @@ export default defineSchema({
   })
     .index("by_token", ["token"])
     .index("by_userId", ["userId"]),
+
+  deletedDevices: defineTable({
+    userId: v.id("users"),
+    provider: providerValidator,
+    providerDeviceId: v.string(),
+    deletedAt: v.number(),
+  }).index("by_userId_and_provider_and_providerDeviceId", [
+    "userId",
+    "provider",
+    "providerDeviceId",
+  ]),
 });

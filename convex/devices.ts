@@ -101,6 +101,30 @@ export const deleteDevice = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const device = await ctx.db.get(args.deviceId);
+    if (!device) {
+      throw new Error("Device not found");
+    }
+
+    const existingDeleted = await ctx.db
+      .query("deletedDevices")
+      .withIndex("by_userId_and_provider_and_providerDeviceId", (q) =>
+        q
+          .eq("userId", device.userId)
+          .eq("provider", device.provider)
+          .eq("providerDeviceId", device.providerDeviceId),
+      )
+      .first();
+
+    if (!existingDeleted) {
+      await ctx.db.insert("deletedDevices", {
+        userId: device.userId,
+        provider: device.provider,
+        providerDeviceId: device.providerDeviceId,
+        deletedAt: Date.now(),
+      });
+    }
+
     const readings = await ctx.db
       .query("readings")
       .withIndex("by_deviceId", (q) => q.eq("deviceId", args.deviceId))
@@ -117,6 +141,19 @@ export const deleteDevice = mutation({
 
     for (const token of embedTokens) {
       await ctx.db.delete(token._id);
+    }
+
+    const kioskConfigs = await ctx.db
+      .query("kioskConfigs")
+      .withIndex("by_userId", (q) => q.eq("userId", device.userId))
+      .collect();
+
+    for (const config of kioskConfigs) {
+      if (!config.deviceIds.includes(args.deviceId)) {
+        continue;
+      }
+      const nextDeviceIds = config.deviceIds.filter((id) => id !== args.deviceId);
+      await ctx.db.patch(config._id, { deviceIds: nextDeviceIds });
     }
 
     await ctx.db.delete(args.deviceId);
@@ -217,6 +254,20 @@ export const addByMac = mutation({
   },
   returns: v.id("devices"),
   handler: async (ctx, args) => {
+    const deletedEntry = await ctx.db
+      .query("deletedDevices")
+      .withIndex("by_userId_and_provider_and_providerDeviceId", (q) =>
+        q
+          .eq("userId", args.userId)
+          .eq("provider", args.provider)
+          .eq("providerDeviceId", args.macAddress),
+      )
+      .first();
+
+    if (deletedEntry) {
+      await ctx.db.delete(deletedEntry._id);
+    }
+
     // Check if device already exists
     const existing = await ctx.db
       .query("devices")
@@ -233,12 +284,27 @@ export const addByMac = mutation({
       }
       
       // Check if the previous owner's account still exists
-      // If the user document is deleted, the device is orphaned and can be claimed
       const previousOwner = await ctx.db.get(existing.userId);
+      const currentUser = await ctx.db.get(args.userId);
       
-      if (previousOwner) {
-        // User still exists, device is not orphaned
+      if (previousOwner && currentUser) {
+        // Check if it's the same person (same email) who re-signed up
+        // This handles the case where user deleted account and re-signed up
+        if (previousOwner.email === currentUser.email) {
+          // Same person - transfer device ownership to new user
+          await ctx.db.patch(existing._id, { 
+            userId: args.userId,
+            name: args.name,
+          });
+          return existing._id;
+        }
+        
+        // Different person - device is not available
         throw new Error("This device is already registered to another account");
+      }
+      
+      if (previousOwner && !currentUser) {
+        throw new Error("Current user not found");
       }
       
       // Previous owner's account was deleted - clean up the orphaned device
@@ -263,6 +329,27 @@ export const addByMac = mutation({
       name: args.name,
       createdAt: Date.now(),
     });
+  },
+});
+
+export const isDeletedForUser = internalQuery({
+  args: {
+    userId: v.id("users"),
+    provider: providerValidator,
+    providerDeviceId: v.string(),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("deletedDevices")
+      .withIndex("by_userId_and_provider_and_providerDeviceId", (q) =>
+        q
+          .eq("userId", args.userId)
+          .eq("provider", args.provider)
+          .eq("providerDeviceId", args.providerDeviceId),
+      )
+      .first();
+    return Boolean(existing);
   },
 });
 

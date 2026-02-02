@@ -181,10 +181,9 @@ function DeviceOverviewCard({
     displayReading?.pm25 !== undefined ? getPM25Level(displayReading.pm25) : null;
   const co2Level =
     displayReading?.co2 !== undefined ? getCO2Level(displayReading.co2) : null;
-
   return (
     <Link href={`/dashboard/device/${device._id}`}>
-      <Card className="group relative overflow-hidden transition-all hover:shadow-lg w-fit">
+      <Card className="group relative overflow-hidden transition-all hover:shadow-lg w-full">
         <CardContent className="pl-6 pr-8 pt-5 pb-5">
           {/* Top: Device name, model, and status */}
           <div className="flex items-start justify-between mb-4">
