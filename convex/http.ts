@@ -8,43 +8,27 @@ import {
 } from "./providers/qingping/webhooks";
 import { mapQingpingReading } from "./providers/qingping/mappers";
 import type { QingpingWebhookBody } from "./providers/types";
-import { Id } from "./_generated/dataModel";
 
 const http = httpRouter();
 
 http.route({
-  path: "/webhooks/qingping/:userId",
+  path: "/webhooks/qingping",
   method: "POST",
   handler: httpAction(async (ctx, req) => {
-    const url = new URL(req.url);
-    const pathParts = url.pathname.split("/").filter(Boolean);
-    const userId = pathParts[pathParts.length - 1] as Id<"users"> | undefined;
-    if (!userId) {
-      return new Response("Missing userId", { status: 400 });
-    }
-
+    const startTime = Date.now();
     const body = (await req.json()) as QingpingWebhookBody;
 
-    const config = await ctx.runQuery(internal.providers.getConfig, {
-      userId,
-      provider: "qingping",
-    });
-
-    if (!config?.appSecret) {
-      return new Response("Webhook secret missing", { status: 401 });
-    }
-
-    const isValid = await verifyQingpingSignature(
-      body.signature.timestamp,
-      body.signature.token,
-      body.signature.signature,
-      config.appSecret,
-    );
-    if (!isValid) {
-      return new Response("Invalid signature", { status: 401 });
-    }
-
+    // Extract device MAC address from webhook payload first
     const { mac, readings } = extractReadingsFromWebhook(body);
+    
+    if (!mac) {
+      console.error("[WEBHOOK] Missing device MAC address");
+      return new Response("Missing device MAC address", { status: 400 });
+    }
+
+    console.log(`[WEBHOOK] Received webhook for device MAC: ${mac}, readings count: ${readings.length}`);
+
+    // Look up device to find which user owns it
     const deviceInfo = await ctx.runQuery(
       internal.devices.getByProviderDeviceId,
       {
@@ -53,10 +37,39 @@ http.route({
       },
     );
 
-    if (!deviceInfo || deviceInfo.userId !== userId) {
+    if (!deviceInfo) {
+      console.warn(`[WEBHOOK] Unknown device MAC: ${mac}`);
       return new Response("Unknown device", { status: 404 });
     }
 
+    console.log(`[WEBHOOK] Device found: MAC ${mac} (${deviceInfo._id}), owner: ${deviceInfo.userId}`);
+
+    // Get the device owner's config for signature verification
+    const config = await ctx.runQuery(internal.providers.getConfig, {
+      userId: deviceInfo.userId,
+      provider: "qingping",
+    });
+
+    if (!config?.appSecret) {
+      console.error(`[WEBHOOK] Webhook secret missing for user: ${deviceInfo.userId}`);
+      return new Response("Webhook secret missing for device owner", { status: 401 });
+    }
+
+    // Verify signature using the device owner's App Secret
+    const isValid = await verifyQingpingSignature(
+      body.signature.timestamp,
+      body.signature.token,
+      body.signature.signature,
+      config.appSecret,
+    );
+    
+    if (!isValid) {
+      console.error(`[WEBHOOK] Invalid signature for device: ${mac}, user: ${deviceInfo.userId}`);
+      return new Response("Invalid signature", { status: 401 });
+    }
+
+    // Process readings for this device
+    let processedCount = 0;
     for (const data of readings) {
       const reading = mapQingpingReading(data);
       if (!reading) {
@@ -75,7 +88,11 @@ http.route({
         pressure: reading.pressure,
         battery: reading.battery,
       });
+      processedCount++;
     }
+
+    const duration = Date.now() - startTime;
+    console.log(`[WEBHOOK] Successfully processed ${processedCount} readings for device ${mac} in ${duration}ms`);
 
     return new Response("ok", { status: 200 });
   }),

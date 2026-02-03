@@ -12,7 +12,7 @@ crons.interval(
 
 crons.interval(
   "poll-qingping-readings",
-  { minutes: 5 },
+  { minutes: 30 },
   internal.providersActions.pollAllReadings,
   {},
 );

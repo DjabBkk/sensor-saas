@@ -8,6 +8,8 @@ const embedTokenShape = v.object({
   deviceId: v.id("devices"),
   token: v.string(),
   label: v.optional(v.string()),
+  description: v.optional(v.string()),
+  size: v.optional(v.union(v.literal("small"), v.literal("medium"), v.literal("large"))),
   isRevoked: v.boolean(),
   createdAt: v.number(),
 });
@@ -49,6 +51,8 @@ export const create = mutation({
     userId: v.id("users"),
     deviceId: v.id("devices"),
     label: v.optional(v.string()),
+    description: v.optional(v.string()),
+    size: v.optional(v.union(v.literal("small"), v.literal("medium"), v.literal("large"))),
   },
   returns: embedTokenShape,
   handler: async (ctx, args) => {
@@ -77,6 +81,8 @@ export const create = mutation({
       deviceId: args.deviceId,
       token,
       label: args.label,
+      description: args.description,
+      size: args.size,
       isRevoked: false,
       createdAt: Date.now(),
     });

@@ -13,6 +13,8 @@ const deviceShape = v.object({
   model: v.optional(v.string()),
   timezone: v.optional(v.string()),
   lastReadingAt: v.optional(v.number()),
+  lastBattery: v.optional(v.number()),
+  providerOffline: v.optional(v.boolean()),
   createdAt: v.number(),
 });
 
@@ -40,6 +42,10 @@ export const getEmbedDevice = query({
   returns: v.union(
     v.null(),
     v.object({
+      embed: v.object({
+        description: v.optional(v.string()),
+        size: v.optional(v.union(v.literal("small"), v.literal("medium"), v.literal("large"))),
+      }),
       device: deviceShape,
       latestReading: v.union(v.null(), readingShape),
       history: v.array(readingShape),
@@ -77,6 +83,10 @@ export const getEmbedDevice = query({
       .take(96);
 
     return {
+      embed: {
+        description: embedToken.description,
+        size: embedToken.size,
+      },
       device,
       latestReading: latestReading ?? null,
       history,
@@ -93,9 +103,11 @@ export const getKioskConfig = query({
     v.null(),
     v.object({
       label: v.optional(v.string()),
+      title: v.optional(v.string()),
       mode: v.union(v.literal("single"), v.literal("multi")),
       theme: v.union(v.literal("dark"), v.literal("light")),
       refreshInterval: v.number(),
+      visibleMetrics: v.optional(v.array(v.string())),
       devices: v.array(
         v.object({
           device: deviceShape,
@@ -141,9 +153,11 @@ export const getKioskConfig = query({
 
     return {
       label: kiosk.label,
+      title: kiosk.title,
       mode: kiosk.mode,
       theme: kiosk.theme,
       refreshInterval: kiosk.refreshInterval,
+      visibleMetrics: kiosk.visibleMetrics,
       devices: devicesWithReadings,
     };
   },

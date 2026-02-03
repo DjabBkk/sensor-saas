@@ -9,6 +9,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Sidebar } from "./_components/Sidebar";
 import { AddDeviceDialog } from "./_components/AddDeviceDialog";
+import { AddDeviceDialogProvider } from "./_components/add-device-context";
 
 export default function DashboardLayout({
   children,
@@ -21,6 +22,7 @@ export default function DashboardLayout({
   const getOrCreateUser = useMutation(api.users.getOrCreateUser);
   const [convexUserId, setConvexUserId] = useState<Id<"users"> | null>(null);
   const [addDeviceOpen, setAddDeviceOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -49,6 +51,22 @@ export default function DashboardLayout({
     };
   }, [isLoaded, userId, user, convexUserId, getOrCreateUser, router]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = window.localStorage.getItem("airview.sidebar.collapsed");
+    if (saved) {
+      setIsSidebarCollapsed(saved === "true");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(
+      "airview.sidebar.collapsed",
+      String(isSidebarCollapsed),
+    );
+  }, [isSidebarCollapsed]);
+
   const devices = useQuery(
     api.devices.list,
     convexUserId ? { userId: convexUserId } : "skip"
@@ -67,19 +85,23 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar
-        devices={devices ?? []}
-        rooms={rooms ?? []}
-        userId={convexUserId}
-        onAddDevice={() => setAddDeviceOpen(true)}
-      />
-      <main className="flex-1 overflow-auto">{children}</main>
-      <AddDeviceDialog
-        open={addDeviceOpen}
-        onOpenChange={setAddDeviceOpen}
-        userId={convexUserId}
-      />
-    </div>
+    <AddDeviceDialogProvider openDialog={() => setAddDeviceOpen(true)}>
+      <div className="flex min-h-screen">
+        <Sidebar
+          devices={devices ?? []}
+          rooms={rooms ?? []}
+          userId={convexUserId}
+          onAddDevice={() => setAddDeviceOpen(true)}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
+        />
+        <main className="flex-1 overflow-auto">{children}</main>
+        <AddDeviceDialog
+          open={addDeviceOpen}
+          onOpenChange={setAddDeviceOpen}
+          userId={convexUserId}
+        />
+      </div>
+    </AddDeviceDialogProvider>
   );
 }

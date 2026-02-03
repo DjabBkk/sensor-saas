@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth, useUser, SignOutButton } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
+import { useRouter } from "next/navigation";
 
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -11,13 +12,30 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { User, CreditCard, Link2, LogOut, CheckCircle, XCircle } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Label } from "@/components/ui/label";
+import { User, CreditCard, Link2, LogOut, CheckCircle, XCircle, Trash2, AlertTriangle, Loader2 } from "lucide-react";
 
 export default function AccountPage() {
-  const { isLoaded, userId } = useAuth();
+  const router = useRouter();
+  const { isLoaded, userId, signOut } = useAuth();
   const { user } = useUser();
   const getOrCreateUser = useMutation(api.users.getOrCreateUser);
+  const deleteUser = useMutation(api.users.deleteUser);
   const [convexUserId, setConvexUserId] = useState<Id<"users"> | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState(false);
 
   useEffect(() => {
     if (!isLoaded || !userId || convexUserId || !user) return;
@@ -49,6 +67,51 @@ export default function AccountPage() {
     .map((n) => n[0])
     .join("")
     .toUpperCase() ?? "U";
+
+  const handleDeleteAccount = async () => {
+    if (!convexUserId) {
+      setDeleteError("User not found. Please refresh the page.");
+      return;
+    }
+
+    if (deleteConfirmText !== "DELETE") {
+      setDeleteError('Please type "DELETE" to confirm');
+      return;
+    }
+
+    setIsDeleting(true);
+    setDeleteError(null);
+
+    try {
+      await deleteUser({ userId: convexUserId });
+
+      // Delete Clerk user BEFORE signing out (requires active session)
+      try {
+        if (user) {
+          await user.delete();
+        }
+      } catch (clerkDeleteError) {
+        console.error("Clerk user deletion failed", clerkDeleteError);
+      }
+
+      // Sign out after Clerk deletion (session may already be invalid, so catch errors)
+      try {
+        await signOut();
+      } catch (signOutError) {
+        console.error("Sign out failed after deletion", signOutError);
+      }
+
+      setDeleteSuccess(true);
+      setTimeout(() => {
+        router.push("/");
+      }, 1500);
+    } catch (error) {
+      setDeleteError(
+        error instanceof Error ? error.message : "Failed to delete account. Please try again.",
+      );
+      setIsDeleting(false);
+    }
+  };
 
   return (
     <div className="space-y-6 p-8">
@@ -211,6 +274,132 @@ export default function AccountPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Danger Zone */}
+      <Card className="border-destructive/50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-destructive">
+            <Trash2 className="h-5 w-5" />
+            Danger Zone
+          </CardTitle>
+          <CardDescription>
+            Irreversible actions that affect your account
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <p className="font-medium">Delete Account</p>
+                <p className="text-sm text-muted-foreground">
+                  Permanently delete your account and all associated data
+                </p>
+              </div>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setShowDeleteDialog(true)}
+              >
+                Delete Account
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Delete Account Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Delete Account
+            </DialogTitle>
+            <DialogDescription>
+              This action cannot be undone. This will permanently delete your account and all
+              associated data.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Warning:</strong> Deleting your account will permanently remove:
+                <ul className="mt-2 ml-4 list-disc space-y-1">
+                  <li>All your devices ({devices?.length ?? 0} device{devices?.length !== 1 ? "s" : ""})</li>
+                  <li>All device readings and history</li>
+                  <li>All rooms and organization</li>
+                  <li>All provider connections and credentials</li>
+                  <li>All embed tokens and kiosk configurations</li>
+                </ul>
+              </AlertDescription>
+            </Alert>
+
+            <div className="space-y-2">
+              <Label htmlFor="delete-confirm">
+                Type <strong>DELETE</strong> to confirm:
+              </Label>
+              <input
+                id="delete-confirm"
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => {
+                  setDeleteConfirmText(e.target.value);
+                  setDeleteError(null);
+                }}
+                placeholder="DELETE"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={isDeleting}
+              />
+            </div>
+
+            {deleteError && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>{deleteError}</AlertDescription>
+              </Alert>
+            )}
+
+            {deleteSuccess && (
+              <Alert>
+                <AlertDescription>
+                  Account deleted. Redirecting to the website...
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDeleteDialog(false);
+                setDeleteConfirmText("");
+                setDeleteError(null);
+                setDeleteSuccess(false);
+              }}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteAccount}
+              disabled={isDeleting || deleteConfirmText !== "DELETE"}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete Account"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

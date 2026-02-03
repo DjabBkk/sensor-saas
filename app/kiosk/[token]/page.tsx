@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, use } from "react";
 import { useQuery } from "convex/react";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/convex/_generated/api";
+import { getDeviceStatus } from "@/lib/deviceStatus";
 import { KioskSingle } from "@/components/kiosk/KioskSingle";
 import { KioskGrid } from "@/components/kiosk/KioskGrid";
 
@@ -52,14 +53,27 @@ export default function KioskPage({ params }: { params: Promise<{ token: string 
       <div className="min-h-screen bg-background p-8 text-foreground">
         {isSingle ? (
           data.devices[0] ? (
-            <KioskSingle
-              deviceName={data.devices[0].device.name}
-              model={data.devices[0].device.model ?? undefined}
-              pm25={data.devices[0].latestReading?.pm25}
-              co2={data.devices[0].latestReading?.co2}
-              tempC={data.devices[0].latestReading?.tempC}
-              rh={data.devices[0].latestReading?.rh}
-            />
+            (() => {
+              const entry = data.devices[0];
+              const status = getDeviceStatus({
+                lastReadingAt: entry.device.lastReadingAt,
+                lastBattery: entry.device.lastBattery,
+                providerOffline: entry.device.providerOffline,
+              });
+              const reading = status.isOnline ? entry.latestReading : null;
+
+              return (
+                <KioskSingle
+                  deviceName={entry.device.name}
+                  model={entry.device.model ?? undefined}
+                  isOnline={status.isOnline}
+                  pm25={reading?.pm25}
+                  co2={reading?.co2}
+                  tempC={reading?.tempC}
+                  rh={reading?.rh}
+                />
+              );
+            })()
           ) : (
             <div className="flex min-h-[60vh] items-center justify-center text-muted-foreground">
               No devices configured for this kiosk.
@@ -67,14 +81,24 @@ export default function KioskPage({ params }: { params: Promise<{ token: string 
           )
         ) : (
           <KioskGrid
-            devices={data.devices.map((entry) => ({
-              deviceId: entry.device._id,
-              deviceName: entry.device.name,
-              pm25: entry.latestReading?.pm25,
-              co2: entry.latestReading?.co2,
-              tempC: entry.latestReading?.tempC,
-              rh: entry.latestReading?.rh,
-            }))}
+            devices={data.devices.map((entry) => {
+              const status = getDeviceStatus({
+                lastReadingAt: entry.device.lastReadingAt,
+                lastBattery: entry.device.lastBattery,
+                providerOffline: entry.device.providerOffline,
+              });
+              const reading = status.isOnline ? entry.latestReading : null;
+
+              return {
+                deviceId: entry.device._id,
+                deviceName: entry.device.name,
+                isOnline: status.isOnline,
+                pm25: reading?.pm25,
+                co2: reading?.co2,
+                tempC: reading?.tempC,
+                rh: reading?.rh,
+              };
+            })}
           />
         )}
       </div>

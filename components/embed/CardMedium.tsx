@@ -2,9 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatNumber, getCO2Level, getPM25Level, getTemperatureLevel, getHumidityLevel } from "./utils";
 
-type EmbedCardProps = {
-  deviceName: string;
-  model?: string;
+type CardMediumProps = {
+  title?: string;
   isOnline?: boolean;
   pm25?: number;
   co2?: number;
@@ -12,15 +11,14 @@ type EmbedCardProps = {
   rh?: number;
 };
 
-export function EmbedCard({
-  deviceName,
-  model,
+export function CardMedium({
+  title,
   isOnline = true,
   pm25,
   co2,
   tempC,
   rh,
-}: EmbedCardProps) {
+}: CardMediumProps) {
   const displayPm25 = isOnline ? pm25 : undefined;
   const displayCo2 = isOnline ? co2 : undefined;
   const displayTempC = isOnline ? tempC : undefined;
@@ -35,10 +33,9 @@ export function EmbedCard({
     <Card className="w-full max-w-sm">
       <CardHeader className="space-y-1">
         <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-lg">{deviceName}</CardTitle>
+          {title && <CardTitle className="text-lg">{title}</CardTitle>}
           {!isOnline && <Badge variant="secondary">Offline</Badge>}
         </div>
-        <p className="text-xs text-muted-foreground">{model ?? "Air sensor"}</p>
       </CardHeader>
       <CardContent className="grid grid-cols-2 gap-4">
         <div>

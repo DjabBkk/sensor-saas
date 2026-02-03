@@ -1,6 +1,6 @@
 "use node";
 
-import { internalAction } from "./_generated/server";
+import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
 
 import { providerValidator } from "./lib/validators";
@@ -97,10 +97,74 @@ export const syncDevicesForUser = internalAction({
       return null;
     }
 
-    const devices = await listDevices(config.accessToken);
+    // Check if token is expired or about to expire (within 5 minutes)
+    const now = Date.now();
+    let accessToken = config.accessToken;
+    if (!config.tokenExpiresAt || config.tokenExpiresAt <= now + 5 * 60 * 1000) {
+      // Token expired or expiring soon, refresh it
+      if (!config.appKey || !config.appSecret) {
+        throw new Error("Token expired and no credentials available to refresh");
+      }
+      
+      if (!config._id) {
+        throw new Error("Provider config missing ID, cannot update token");
+      }
+      
+      console.log("[syncDevicesForUser] Token expired, refreshing...");
+      const tokenResult = await getAccessToken(config.appKey, config.appSecret);
+      accessToken = tokenResult.accessToken;
+      
+      // Update the token in the database
+      await ctx.runMutation(internal.providers.updateToken, {
+        providerConfigId: config._id,
+        accessToken: tokenResult.accessToken,
+        tokenExpiresAt: tokenResult.tokenExpiresAt,
+      });
+    }
+
+    let devices;
+    try {
+      devices = await listDevices(accessToken);
+    } catch (error: any) {
+      // If we get a 401, try refreshing the token once more
+      if (error?.message?.includes("401") && config.appKey && config.appSecret && config._id) {
+        console.log("[syncDevicesForUser] Got 401, refreshing token and retrying...");
+        const tokenResult = await getAccessToken(config.appKey, config.appSecret);
+        accessToken = tokenResult.accessToken;
+        
+        await ctx.runMutation(internal.providers.updateToken, {
+          providerConfigId: config._id,
+          accessToken: tokenResult.accessToken,
+          tokenExpiresAt: tokenResult.tokenExpiresAt,
+        });
+        
+        // Retry once
+        devices = await listDevices(accessToken);
+      } else {
+        throw error;
+      }
+    }
+    console.log(
+      "[syncDevicesForUser] fetched devices",
+      devices.length,
+      "at",
+      new Date().toISOString()
+    );
 
     for (const device of devices) {
       const normalized = mapQingpingDevice(device);
+      const isDeleted: boolean = await ctx.runQuery(
+        internal.devices.isDeletedForUser,
+        {
+          userId: args.userId,
+          provider: args.provider,
+          providerDeviceId: normalized.providerDeviceId,
+        },
+      );
+      if (isDeleted) {
+        continue;
+      }
+
       await ctx.runMutation(internal.devices.upsertFromProvider, {
         userId: args.userId,
         provider: args.provider,
@@ -108,9 +172,21 @@ export const syncDevicesForUser = internalAction({
         name: normalized.name,
         model: normalized.model,
         timezone: normalized.timezone,
+        providerOffline: device.status?.offline ?? false,
       });
 
       const reading = mapQingpingReading(device.data);
+      if (reading) {
+        console.log(
+          "[syncDevicesForUser] device",
+          normalized.providerDeviceId,
+          "reading.ts",
+          reading.ts,
+          "timestamp age:",
+          Date.now() - reading.ts,
+          "ms ago"
+        );
+      }
       if (reading) {
         const deviceInfo = await ctx.runQuery(
           internal.devices.getByProviderDeviceId,
@@ -121,7 +197,7 @@ export const syncDevicesForUser = internalAction({
         );
 
         if (deviceInfo) {
-          await ctx.runMutation(internal.readings.ingest, {
+          const readingId = await ctx.runMutation(internal.readings.ingest, {
             deviceId: deviceInfo._id,
             ts: reading.ts,
             pm25: reading.pm25,
@@ -133,7 +209,27 @@ export const syncDevicesForUser = internalAction({
             pressure: reading.pressure,
             battery: reading.battery,
           });
+          console.log(
+            "[syncDevicesForUser] ingested reading",
+            readingId,
+            "for device",
+            deviceInfo._id,
+            "pm25:",
+            reading.pm25,
+            "co2:",
+            reading.co2
+          );
+        } else {
+          console.warn(
+            "[syncDevicesForUser] device not found in DB:",
+            normalized.providerDeviceId
+          );
         }
+      } else {
+        console.log(
+          "[syncDevicesForUser] no reading data for device:",
+          normalized.providerDeviceId
+        );
       }
     }
 
@@ -142,6 +238,26 @@ export const syncDevicesForUser = internalAction({
         providerConfigId: config._id,
       });
     }
+
+    return null;
+  },
+});
+
+export const syncDevicesForUserPublic = action({
+  args: {
+    userId: v.id("users"),
+    provider: providerValidator,
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    if (args.provider !== "qingping") {
+      throw new Error("Only Qingping is supported for now.");
+    }
+
+    await ctx.runAction(internal.providersActions.syncDevicesForUser, {
+      userId: args.userId,
+      provider: args.provider,
+    });
 
     return null;
   },
@@ -179,19 +295,107 @@ export const pollAllReadings = internalAction({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
+    const startTime = Date.now();
+    console.log("[POLLING] Starting polling cycle at", new Date().toISOString());
+    
     const configs = await ctx.runQuery(internal.providers.listAllConfigs, {});
+    const qingpingConfigs = configs.filter(c => c.provider === "qingping");
+    
+    console.log(`[POLLING] Found ${qingpingConfigs.length} Qingping configurations to poll`);
 
-    for (const config of configs) {
+    let totalDevicesProcessed = 0;
+    let totalReadingsProcessed = 0;
+    let errors = 0;
+
+    for (const config of qingpingConfigs) {
       if (config.provider !== "qingping") {
         continue;
       }
 
-      const devices = await listDevices(config.accessToken);
+      // Check if token is expired or about to expire (within 5 minutes)
+      const now = Date.now();
+      let accessToken = config.accessToken;
+      
+      if (!config.tokenExpiresAt || config.tokenExpiresAt <= now + 5 * 60 * 1000) {
+        // Token expired or expiring soon, refresh it
+        if (!config.appKey || !config.appSecret) {
+          console.warn("[POLLING] Token expired and no credentials available to refresh for user:", config.userId);
+          errors++;
+          continue;
+        }
+        
+        console.log("[POLLING] Token expired, refreshing for user:", config.userId);
+        const tokenResult = await getAccessToken(config.appKey, config.appSecret);
+        accessToken = tokenResult.accessToken;
+        
+        // Update the token in the database
+        await ctx.runMutation(internal.providers.updateToken, {
+          providerConfigId: config._id,
+          accessToken: tokenResult.accessToken,
+          tokenExpiresAt: tokenResult.tokenExpiresAt,
+        });
+      }
+
+      let devices;
+      try {
+        devices = await listDevices(accessToken);
+        console.log(`[POLLING] Fetched ${devices.length} devices for user: ${config.userId}`);
+      } catch (error: any) {
+        // If we get a 401, try refreshing the token once more
+        if (error?.message?.includes("401") && config.appKey && config.appSecret) {
+          console.log("[POLLING] Got 401, refreshing token and retrying for user:", config.userId);
+          const tokenResult = await getAccessToken(config.appKey, config.appSecret);
+          accessToken = tokenResult.accessToken;
+          
+          await ctx.runMutation(internal.providers.updateToken, {
+            providerConfigId: config._id,
+            accessToken: tokenResult.accessToken,
+            tokenExpiresAt: tokenResult.tokenExpiresAt,
+          });
+          
+          // Retry once
+          try {
+            devices = await listDevices(accessToken);
+            console.log(`[POLLING] Retry successful, fetched ${devices.length} devices for user: ${config.userId}`);
+          } catch (retryError) {
+            console.error("[POLLING] Failed after token refresh for user:", config.userId, retryError);
+            errors++;
+            continue;
+          }
+        } else {
+          console.error("[POLLING] API error for user:", config.userId, error);
+          errors++;
+          continue;
+        }
+      }
+
       for (const device of devices) {
+        const isDeleted: boolean = await ctx.runQuery(
+          internal.devices.isDeletedForUser,
+          {
+            userId: config.userId,
+            provider: config.provider,
+            providerDeviceId: device.info.mac,
+          },
+        );
+        if (isDeleted) {
+          continue;
+        }
+
         const reading = mapQingpingReading(device.data);
         if (!reading) {
           continue;
         }
+
+        await ctx.runMutation(internal.devices.upsertFromProvider, {
+          userId: config.userId,
+          provider: config.provider,
+          providerDeviceId: device.info.mac,
+          name: device.info.name,
+          model: device.product?.en_name ?? device.product?.name,
+          timezone: undefined,
+          providerOffline: device.status?.offline ?? false,
+        });
 
         const deviceInfo = await ctx.runQuery(
           internal.devices.getByProviderDeviceId,
@@ -217,8 +421,19 @@ export const pollAllReadings = internalAction({
           pressure: reading.pressure,
           battery: reading.battery,
         });
+        
+        totalDevicesProcessed++;
+        totalReadingsProcessed++;
       }
+
+      // Update last sync time
+      await ctx.runMutation(internal.providers.updateLastSync, {
+        providerConfigId: config._id,
+      });
     }
+
+    const duration = Date.now() - startTime;
+    console.log(`[POLLING] Completed polling cycle in ${duration}ms - Processed ${totalReadingsProcessed} readings from ${totalDevicesProcessed} devices, ${errors} errors`);
 
     return null;
   },

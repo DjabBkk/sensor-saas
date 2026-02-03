@@ -2,6 +2,7 @@ import {
   internalMutation,
   internalQuery,
   mutation,
+  query,
 } from "./_generated/server";
 import { v } from "convex/values";
 
@@ -34,6 +35,23 @@ export const getConfig = internalQuery({
         q.eq("userId", args.userId).eq("provider", args.provider),
       )
       .unique();
+  },
+});
+
+export const hasProviderCredentials = query({
+  args: {
+    userId: v.id("users"),
+    provider: providerValidator,
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const config = await ctx.db
+      .query("providerConfigs")
+      .withIndex("by_userId_and_provider", (q) =>
+        q.eq("userId", args.userId).eq("provider", args.provider),
+      )
+      .unique();
+    return Boolean(config?.appKey && config?.appSecret);
   },
 });
 
