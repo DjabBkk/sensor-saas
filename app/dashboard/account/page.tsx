@@ -85,18 +85,20 @@ export default function AccountPage() {
     try {
       await deleteUser({ userId: convexUserId });
 
-      try {
-        await signOut();
-      } catch (signOutError) {
-        console.error("Sign out failed after deletion", signOutError);
-      }
-
+      // Delete Clerk user BEFORE signing out (requires active session)
       try {
         if (user) {
           await user.delete();
         }
       } catch (clerkDeleteError) {
         console.error("Clerk user deletion failed", clerkDeleteError);
+      }
+
+      // Sign out after Clerk deletion (session may already be invalid, so catch errors)
+      try {
+        await signOut();
+      } catch (signOutError) {
+        console.error("Sign out failed after deletion", signOutError);
       }
 
       setDeleteSuccess(true);
