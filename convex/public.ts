@@ -42,6 +42,10 @@ export const getEmbedDevice = query({
   returns: v.union(
     v.null(),
     v.object({
+      embed: v.object({
+        description: v.optional(v.string()),
+        size: v.optional(v.union(v.literal("small"), v.literal("medium"), v.literal("large"))),
+      }),
       device: deviceShape,
       latestReading: v.union(v.null(), readingShape),
       history: v.array(readingShape),
@@ -79,6 +83,10 @@ export const getEmbedDevice = query({
       .take(96);
 
     return {
+      embed: {
+        description: embedToken.description,
+        size: embedToken.size,
+      },
       device,
       latestReading: latestReading ?? null,
       history,

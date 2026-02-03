@@ -30,6 +30,7 @@ import {
   Monitor,
   Code,
   ChevronRight,
+  ChevronLeft,
   Sun,
   Moon,
 } from "lucide-react";
@@ -54,12 +55,14 @@ type SidebarProps = {
   rooms: Room[];
   userId: Id<"users">;
   onAddDevice?: () => void;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 };
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/devices", label: "Devices", icon: Cpu },
-  { href: "/dashboard/kiosk", label: "Kiosk", icon: Monitor },
+  { href: "/dashboard/kiosk", label: "Kiosk", icon: Monitor, comingSoon: true },
   { href: "/dashboard/widgets", label: "Widgets", icon: Code },
 ];
 
@@ -68,7 +71,14 @@ const bottomNavItems = [
   { href: "/dashboard/account", label: "Account", icon: User },
 ];
 
-export function Sidebar({ devices, rooms, userId, onAddDevice }: SidebarProps) {
+export function Sidebar({
+  devices,
+  rooms,
+  userId,
+  onAddDevice,
+  isCollapsed = false,
+  onToggleCollapse,
+}: SidebarProps) {
   const pathname = usePathname();
 
   // Group devices by room
@@ -107,13 +117,28 @@ export function Sidebar({ devices, rooms, userId, onAddDevice }: SidebarProps) {
 
   return (
     <TooltipProvider>
-      <aside className="flex w-64 flex-col border-r border-border bg-sidebar">
+      <aside
+        className={`flex flex-col border-r border-border bg-sidebar transition-all duration-200 ${
+          isCollapsed ? "w-16" : "w-64"
+        }`}
+      >
         {/* Logo */}
-        <div className="flex h-14 items-center gap-3 border-b border-border px-4">
+        <div className="flex h-14 items-center justify-between border-b border-border px-4">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500">
             <Wind className="h-4 w-4 text-white" />
           </div>
-          <span className="text-lg font-semibold text-foreground">AirView</span>
+          {!isCollapsed && (
+            <span className="text-lg font-semibold text-foreground">AirView</span>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={onToggleCollapse}
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </Button>
         </div>
 
         {/* Main Navigation */}
@@ -125,11 +150,18 @@ export function Sidebar({ devices, rooms, userId, onAddDevice }: SidebarProps) {
               <Link key={item.href} href={item.href}>
                 <Button
                   variant={active ? "secondary" : "ghost"}
-                  className="w-full justify-start gap-3"
+                  className={`w-full justify-start gap-3 hover:bg-accent/60 ${
+                    isCollapsed ? "px-2" : ""
+                  }`}
                   size="sm"
                 >
                   <Icon className="h-4 w-4" />
-                  {item.label}
+                  {!isCollapsed && item.label}
+                  {!isCollapsed && item.comingSoon ? (
+                    <Badge variant="secondary" className="ml-auto text-[10px]">
+                      Coming soon
+                    </Badge>
+                  ) : null}
                 </Button>
               </Link>
             );
@@ -140,27 +172,31 @@ export function Sidebar({ devices, rooms, userId, onAddDevice }: SidebarProps) {
 
         {/* Devices Section */}
         <div className="flex-1 overflow-y-auto p-3">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Devices
-            </span>
-            <Badge variant="secondary" className="text-xs">
-              {devices.length}
-            </Badge>
-          </div>
+          {!isCollapsed && (
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Devices
+              </span>
+              <Badge variant="secondary" className="text-xs">
+                {devices.length}
+              </Badge>
+            </div>
+          )}
 
           {devices.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border p-4 text-center">
-              <p className="text-sm text-muted-foreground">No devices yet</p>
-              <Button
-                variant="link"
-                size="sm"
-                className="mt-1 h-auto p-0 text-xs"
-                onClick={onAddDevice}
-              >
-                Add your first device
-              </Button>
-            </div>
+            !isCollapsed && (
+              <div className="rounded-lg border border-dashed border-border p-4 text-center">
+                <p className="text-sm text-muted-foreground">No devices yet</p>
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="mt-1 h-auto p-0 text-xs"
+                  onClick={onAddDevice}
+                >
+                  Add your first device
+                </Button>
+              </div>
+            )
           ) : (
             <div className="space-y-4">
               {sortedRoomIds.map((roomId) => {
@@ -174,15 +210,18 @@ export function Sidebar({ devices, rooms, userId, onAddDevice }: SidebarProps) {
 
                 return (
                   <div key={roomId}>
-                    <span className="mb-1.5 block text-[10px] font-medium uppercase tracking-widest text-muted-foreground/70">
-                      {roomName}
-                    </span>
+                    {!isCollapsed && (
+                      <span className="mb-1.5 block text-[10px] font-medium uppercase tracking-widest text-muted-foreground/70">
+                        {roomName}
+                      </span>
+                    )}
                     <div className="space-y-0.5">
                       {roomDevices.map((device) => (
                         <DeviceSidebarItem
                           key={device._id}
                           device={device}
                           isActive={isDeviceActive(device._id)}
+                          isCollapsed={isCollapsed}
                         />
                       ))}
                     </div>
@@ -196,18 +235,20 @@ export function Sidebar({ devices, rooms, userId, onAddDevice }: SidebarProps) {
           <Button
             variant="outline"
             size="sm"
-            className="mt-4 w-full gap-2"
+            className={`mt-4 w-full gap-2 hover:bg-accent/50 ${
+              isCollapsed ? "px-2" : ""
+            }`}
             onClick={onAddDevice}
           >
             <Plus className="h-4 w-4" />
-            Add Device
+            {!isCollapsed && "Add Device"}
           </Button>
         </div>
 
         <Separator />
 
         {/* Theme Toggle */}
-        <ThemeToggle />
+        <ThemeToggle isCollapsed={isCollapsed} />
 
         <Separator />
 
@@ -220,11 +261,13 @@ export function Sidebar({ devices, rooms, userId, onAddDevice }: SidebarProps) {
               <Link key={item.href} href={item.href}>
                 <Button
                   variant={active ? "secondary" : "ghost"}
-                  className="w-full justify-start gap-3"
+                  className={`w-full justify-start gap-3 hover:bg-accent/60 ${
+                    isCollapsed ? "px-2" : ""
+                  }`}
                   size="sm"
                 >
                   <Icon className="h-4 w-4" />
-                  {item.label}
+                  {!isCollapsed && item.label}
                 </Button>
               </Link>
             );
@@ -236,7 +279,7 @@ export function Sidebar({ devices, rooms, userId, onAddDevice }: SidebarProps) {
 }
 
 // Theme Toggle Component
-function ThemeToggle() {
+function ThemeToggle({ isCollapsed }: { isCollapsed: boolean }) {
   const { theme, setTheme, resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
 
@@ -248,7 +291,7 @@ function ThemeToggle() {
         ) : (
           <Sun className="h-4 w-4" />
         )}
-        <span>{isDark ? "Dark" : "Light"} Mode</span>
+        {!isCollapsed && <span>{isDark ? "Dark" : "Light"} Mode</span>}
       </div>
       <Switch
         checked={isDark}
@@ -263,9 +306,11 @@ function ThemeToggle() {
 function DeviceSidebarItem({
   device,
   isActive,
+  isCollapsed,
 }: {
   device: Device;
   isActive: boolean;
+  isCollapsed: boolean;
 }) {
   // Query latest reading to get most accurate status
   const reading = useQuery(api.readings.latest, {
@@ -285,15 +330,19 @@ function DeviceSidebarItem({
           <Button
             variant={isActive ? "secondary" : "ghost"}
             size="sm"
-            className="group w-full justify-start gap-2 text-left"
+            className="group w-full justify-start gap-2 text-left hover:bg-accent/60"
           >
             {status.isOnline ? (
               <Wifi className="h-3 w-3 text-emerald-500" />
             ) : (
               <WifiOff className="h-3 w-3 text-muted-foreground" />
             )}
-            <span className="flex-1 truncate text-xs">{device.name}</span>
-            <ChevronRight className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+            {!isCollapsed && (
+              <>
+                <span className="flex-1 truncate text-xs">{device.name}</span>
+                <ChevronRight className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+              </>
+            )}
           </Button>
         </Link>
       </TooltipTrigger>

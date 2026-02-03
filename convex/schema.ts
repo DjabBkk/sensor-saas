@@ -32,6 +32,7 @@ export default defineSchema({
     lastBattery: v.optional(v.number()),
     providerOffline: v.optional(v.boolean()),
     hiddenMetrics: v.optional(v.array(v.string())),
+    dashboardMetrics: v.optional(v.array(v.string())),
     createdAt: v.number(),
   })
     .index("by_userId", ["userId"])
@@ -71,6 +72,8 @@ export default defineSchema({
     deviceId: v.id("devices"),
     token: v.string(),
     label: v.optional(v.string()),
+    description: v.optional(v.string()),
+    size: v.optional(v.union(v.literal("small"), v.literal("medium"), v.literal("large"))),
     isRevoked: v.boolean(),
     createdAt: v.number(),
   })

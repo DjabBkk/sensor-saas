@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "convex/react";
 import { Id } from "@/convex/_generated/dataModel";
+import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { getDeviceStatus } from "@/lib/deviceStatus";
 import { RadialGaugeCard } from "@/components/ui/radial-gauge";
@@ -14,6 +16,7 @@ import {
   getTemperatureLevel,
   getHumidityLevel,
   getBatteryLevel,
+  getTVOCLevel,
 } from "@/lib/aqi-levels";
 import {
   Select,
@@ -56,6 +59,7 @@ type Device = {
   lastBattery?: number;
   providerOffline?: boolean;
   hiddenMetrics?: string[];
+  dashboardMetrics?: string[];
 };
 
 type DeviceCardProps = {
@@ -70,6 +74,7 @@ const METRIC_COLORS: Record<string, string> = {
   temperature: "#3B82F6", // Blue
   humidity: "#06B6D4",    // Cyan
   pm10: "#8B5CF6",    // Purple
+  voc: "#10B981",     // Emerald
 };
 
 // Metric labels and units for the chart
@@ -79,9 +84,55 @@ const METRIC_INFO: Record<string, { label: string; unit: string }> = {
   temperature: { label: "Temperature", unit: "°C" },
   humidity: { label: "Humidity", unit: "%" },
   pm10: { label: "PM10", unit: "µg/m³" },
+  voc: { label: "TVOC", unit: "ppb" },
 };
 
-const CHART_METRICS = ["pm25", "co2", "temperature", "humidity", "pm10"] as const;
+const CHART_METRICS = ["pm25", "co2", "temperature", "humidity", "pm10", "voc"] as const;
+const TIME_RANGES = {
+  "1d": { days: 1, label: "Today" },
+  "7d": { days: 7, label: "Last 7 days" },
+  "30d": { days: 30, label: "Last 30 days" },
+  "90d": { days: 90, label: "Last 3 months" },
+} as const;
+
+const getXAxisTickFormatter = (range: keyof typeof TIME_RANGES) => {
+  if (range === "1d") {
+    return (value: number) =>
+      new Date(value).toLocaleTimeString("en-US", {
+        hour: "numeric",
+        hour12: true,
+      });
+  }
+  if (range === "7d") {
+    return (value: number) =>
+      new Date(value).toLocaleDateString("en-US", {
+        weekday: "short",
+        day: "numeric",
+      });
+  }
+  return (value: number) =>
+    new Date(value).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+};
+
+const getTooltipLabelFormatter = (range: keyof typeof TIME_RANGES) => {
+  if (range === "1d") {
+    return (value: number) =>
+      new Date(value).toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+  }
+  return (value: number) =>
+    new Date(value).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+};
 
 function getOfflineReasonLabel(
   reason: "battery" | "provider" | "stale" | "unknown" | null
@@ -113,27 +164,6 @@ function formatRelativeTime(timestampMs: number) {
   return `${days}d ago`;
 }
 
-// Mock historical data generator
-function generateMockHistoryData(days: number) {
-  const data = [];
-  const now = new Date();
-  
-  for (let i = days; i >= 0; i--) {
-    const date = new Date(now);
-    date.setDate(date.getDate() - i);
-    
-    data.push({
-      date: date.toISOString().split('T')[0],
-      pm25: Math.floor(Math.random() * 50) + 5,
-      co2: Math.floor(Math.random() * 800) + 400,
-      temperature: Math.floor(Math.random() * 10) + 20,
-      humidity: Math.floor(Math.random() * 40) + 30,
-      pm10: Math.floor(Math.random() * 80) + 10,
-    });
-  }
-  
-  return data;
-}
 
 export function DeviceCard({ device, reading }: DeviceCardProps) {
   const status = getDeviceStatus({
@@ -268,6 +298,16 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
             : null,
       },
       {
+        key: "voc",
+        label: "TVOC",
+        unit: "ppb",
+        value: displayReading?.voc,
+        level:
+          displayReading?.voc !== undefined
+            ? getTVOCLevel(displayReading.voc)
+            : null,
+      },
+      {
         key: "battery",
         label: "Battery",
         unit: "%",
@@ -285,9 +325,74 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
     (metric) => !hiddenMetricsSet.has(metric.key)
   );
 
-  // Generate mock history data based on time range
-  const daysMap: Record<string, number> = { "7d": 7, "30d": 30, "90d": 90 };
-  const historyData = generateMockHistoryData(daysMap[timeRange] ?? 30);
+  const availableMetricKeys = useMemo(() => {
+    if (!reading) return undefined;
+    const keys: string[] = [];
+    if (reading.pm25 !== undefined) keys.push("pm25");
+    if (reading.co2 !== undefined) keys.push("co2");
+    if (reading.tempC !== undefined) keys.push("temperature");
+    if (reading.rh !== undefined) keys.push("humidity");
+    if (reading.pm10 !== undefined) keys.push("pm10");
+    if (reading.voc !== undefined) keys.push("voc");
+    if (reading.battery !== undefined) keys.push("battery");
+    return keys;
+  }, [reading]);
+
+  // Calculate time range for history query
+  const timeRangeMs = useMemo(() => {
+    const now = Date.now();
+    const range = TIME_RANGES[timeRange as keyof typeof TIME_RANGES];
+    const days = range?.days ?? 30;
+    const startTs = now - days * 24 * 60 * 60 * 1000;
+    // Ensure domain is always valid (startTs < endTs) and has at least 1 hour difference to avoid duplicate ticks
+    const endTs = Math.max(now, startTs + 60 * 60 * 1000);
+    return {
+      startTs,
+      endTs,
+    };
+  }, [timeRange]);
+
+  // Generate explicit tick values to avoid duplicate key errors in Recharts
+  const xAxisTicks = useMemo(() => {
+    const { startTs, endTs } = timeRangeMs;
+    const tickCount = 5; // Number of ticks to show
+    const step = (endTs - startTs) / (tickCount - 1);
+    const ticks: number[] = [];
+    for (let i = 0; i < tickCount; i++) {
+      ticks.push(Math.round(startTs + step * i));
+    }
+    return ticks;
+  }, [timeRangeMs]);
+
+  // Fetch real historical data
+  const historyReadings = useQuery(api.readings.history, {
+    deviceId: device._id,
+    startTs: timeRangeMs.startTs,
+    endTs: timeRangeMs.endTs,
+    limit: 1000, // Adjust based on your needs
+  });
+
+  // Transform readings data to chart format
+  // Query returns data in descending order (newest first), so we reverse to get chronological (oldest first, left to right)
+  const historyData = useMemo(() => {
+    if (!historyReadings || historyReadings.length === 0) {
+      return [];
+    }
+
+    // Sort by timestamp ascending (oldest first) to ensure left-to-right chronological display
+    return historyReadings
+      .slice()
+      .sort((a, b) => a.ts - b.ts)
+      .map((reading) => ({
+        ts: reading.ts,
+        pm25: reading.pm25,
+        co2: reading.co2,
+        temperature: reading.tempC,
+        humidity: reading.rh,
+        pm10: reading.pm10,
+        voc: reading.voc,
+      }));
+  }, [historyReadings]);
 
   // Chart config for selected metrics
   const chartConfig: ChartConfig = {
@@ -296,6 +401,7 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
     temperature: { label: "Temp", color: METRIC_COLORS.temperature },
     humidity: { label: "Humidity", color: METRIC_COLORS.humidity },
     pm10: { label: "PM10", color: METRIC_COLORS.pm10 },
+    voc: { label: "TVOC", color: METRIC_COLORS.voc },
   };
 
   return (
@@ -317,6 +423,7 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
                 deviceId={device._id}
                 deviceName={device.name}
                 hiddenMetrics={device.hiddenMetrics}
+                availableMetrics={availableMetricKeys}
                 trigger={
                   <Button
                     variant="ghost"
@@ -383,6 +490,11 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
                 Click metric cards to add/remove from chart
               </CardDescription>
             </div>
+            <div className="text-xs text-muted-foreground">
+              {historyData.length > 0
+                ? `${historyData.length} readings`
+                : "No data for this range"}
+            </div>
             <div className="flex flex-wrap items-center gap-3">
               {/* Primary metric selector */}
               <div className="flex items-center gap-2">
@@ -446,24 +558,29 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
 
               {/* Time range selector */}
               <Select value={timeRange} onValueChange={setTimeRange}>
-                <SelectTrigger className="w-[130px] rounded-lg" aria-label="Select time range">
+                <SelectTrigger className="w-[160px] rounded-lg" aria-label="Select time range">
                   <SelectValue placeholder="Last 30 days" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl">
-                  <SelectItem value="90d" className="rounded-lg">Last 3 months</SelectItem>
-                  <SelectItem value="30d" className="rounded-lg">Last 30 days</SelectItem>
-                  <SelectItem value="7d" className="rounded-lg">Last 7 days</SelectItem>
+                  {Object.entries(TIME_RANGES).map(([value, { label }]) => (
+                    <SelectItem key={value} value={value} className="rounded-lg">
+                      {label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
           </CardHeader>
-          <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
-            {hasChartMetrics ? (
+          <CardContent className="px-2 pt-4 pr-8 sm:px-6 sm:pr-12 sm:pt-6">
+            {hasChartMetrics && historyData.length > 0 ? (
               <ChartContainer
                 config={chartConfig}
                 className="aspect-auto h-[300px] w-full"
               >
-                <AreaChart data={historyData}>
+                <AreaChart 
+                  data={historyData}
+                  margin={{ top: 10, right: 30, bottom: 10, left: 0 }}
+                >
                   <defs>
                     <linearGradient id={`fill-${leftMetric}`} x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor={METRIC_COLORS[leftMetric]} stopOpacity={0.8} />
@@ -478,18 +595,17 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
                   </defs>
                   <CartesianGrid vertical={false} strokeDasharray="3 3" />
                   <XAxis
-                    dataKey="date"
+                    dataKey="ts"
+                    type="number"
+                    scale="time"
+                    domain={[timeRangeMs.startTs, timeRangeMs.endTs]}
+                    ticks={xAxisTicks}
                     tickLine={false}
                     axisLine={false}
                     tickMargin={8}
-                    minTickGap={32}
-                    tickFormatter={(value) => {
-                      const date = new Date(value);
-                      return date.toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                      });
-                    }}
+                    tickFormatter={getXAxisTickFormatter(
+                      timeRange as keyof typeof TIME_RANGES,
+                    )}
                   />
                   {/* Left Y-Axis (primary) */}
                   <YAxis
@@ -534,12 +650,9 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
                     cursor={false}
                     content={
                       <ChartTooltipContent
-                        labelFormatter={(value) => {
-                          return new Date(value).toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                          });
-                        }}
+                        labelFormatter={getTooltipLabelFormatter(
+                          timeRange as keyof typeof TIME_RANGES,
+                        )}
                         indicator="dot"
                       />
                     }
@@ -569,6 +682,10 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
                   <ChartLegend content={<ChartLegendContent />} />
                 </AreaChart>
               </ChartContainer>
+            ) : hasChartMetrics ? (
+              <div className="flex h-[220px] items-center justify-center text-sm text-muted-foreground">
+                No readings available for the selected time range.
+              </div>
             ) : (
               <div className="flex h-[220px] items-center justify-center text-sm text-muted-foreground">
                 No chart metrics enabled. Enable one in settings.

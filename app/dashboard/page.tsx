@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
@@ -11,9 +11,25 @@ import { Id } from "@/convex/_generated/dataModel";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { getDeviceStatus } from "@/lib/deviceStatus";
-import { getPM25Level, getCO2Level } from "@/lib/aqi-levels";
+import {
+  getPM25Level,
+  getPM10Level,
+  getCO2Level,
+  getTemperatureLevel,
+  getHumidityLevel,
+  getBatteryLevel,
+  getTVOCLevel,
+} from "@/lib/aqi-levels";
 import { RadialGaugeInline } from "@/components/ui/radial-gauge";
-import { Plus, ChevronRight } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
+import { Plus, ChevronRight, Settings } from "lucide-react";
 import { useAddDeviceDialog } from "./_components/add-device-context";
 
 export default function DashboardPage() {
@@ -164,9 +180,11 @@ function DeviceOverviewCard({
     lastReadingAt?: number;
     lastBattery?: number;
     providerOffline?: boolean;
+    dashboardMetrics?: string[];
   };
 }) {
   const reading = useQuery(api.readings.latest, { deviceId: device._id });
+  const updateDashboardMetrics = useMutation(api.devices.updateDashboardMetrics);
 
   const lastReadingAt = reading?.ts ?? device.lastReadingAt;
   const status = getDeviceStatus({
@@ -177,60 +195,256 @@ function DeviceOverviewCard({
 
   // Show readings even when offline (so users can see last known values)
   const displayReading = reading;
-  const pm25Level =
-    displayReading?.pm25 !== undefined ? getPM25Level(displayReading.pm25) : null;
-  const co2Level =
-    displayReading?.co2 !== undefined ? getCO2Level(displayReading.co2) : null;
-  return (
-    <Link href={`/dashboard/device/${device._id}`}>
-      <Card className="group relative overflow-hidden transition-all hover:shadow-lg w-full">
-        <CardContent className="pl-6 pr-8 pt-5 pb-5">
-          {/* Top: Device name, model, and status */}
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-lg font-bold group-hover:text-primary">
-                  {device.name}
-                </h3>
-                {/* Status dot */}
-                <span
-                  className={`h-2.5 w-2.5 rounded-full ${
-                    status.isOnline ? "bg-emerald-500" : "bg-red-500"
-                  }`}
-                  title={status.isOnline ? "Online" : "Offline"}
-                />
-              </div>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                {device.model ?? "Qingping"}
-              </p>
-            </div>
-            <ChevronRight className="h-5 w-5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 ml-4" />
-          </div>
+  const metricConfig = {
+    pm25: {
+      label: "PM2.5",
+      unit: "µg/m³",
+      value: displayReading?.pm25,
+      level:
+        displayReading?.pm25 !== undefined ? getPM25Level(displayReading.pm25) : null,
+    },
+    pm10: {
+      label: "PM10",
+      unit: "µg/m³",
+      value: displayReading?.pm10,
+      level:
+        displayReading?.pm10 !== undefined ? getPM10Level(displayReading.pm10) : null,
+    },
+    co2: {
+      label: "CO₂",
+      unit: "ppm",
+      value: displayReading?.co2,
+      level:
+        displayReading?.co2 !== undefined ? getCO2Level(displayReading.co2) : null,
+    },
+    temperature: {
+      label: "Temperature",
+      unit: "°C",
+      value: displayReading?.tempC,
+      level:
+        displayReading?.tempC !== undefined
+          ? getTemperatureLevel(displayReading.tempC)
+          : null,
+    },
+    humidity: {
+      label: "Humidity",
+      unit: "%",
+      value: displayReading?.rh,
+      level:
+        displayReading?.rh !== undefined ? getHumidityLevel(displayReading.rh) : null,
+    },
+    voc: {
+      label: "TVOC",
+      unit: "ppb",
+      value: displayReading?.voc,
+      level:
+        displayReading?.voc !== undefined ? getTVOCLevel(displayReading.voc) : null,
+    },
+    battery: {
+      label: "Battery",
+      unit: "%",
+      value: displayReading?.battery,
+      level:
+        displayReading?.battery !== undefined
+          ? getBatteryLevel(displayReading.battery)
+          : null,
+    },
+  } as const;
 
-          {/* Bottom: Radial gauges - left aligned */}
-          {displayReading ? (
-            <div className="flex items-center justify-start gap-6">
-              <RadialGaugeInline
-                label="PM2.5"
-                value={displayReading.pm25}
-                unit="µg/m³"
-                level={pm25Level}
-              />
-              <RadialGaugeInline
-                label="CO₂"
-                value={displayReading.co2}
-                unit="ppm"
-                level={co2Level}
-              />
+  const allMetrics = [
+    { key: "pm25", label: "PM2.5", readingKey: "pm25" },
+    { key: "pm10", label: "PM10", readingKey: "pm10" },
+    { key: "co2", label: "CO₂", readingKey: "co2" },
+    { key: "temperature", label: "Temperature", readingKey: "tempC" },
+    { key: "humidity", label: "Humidity", readingKey: "rh" },
+    { key: "voc", label: "TVOC", readingKey: "voc" },
+    { key: "battery", label: "Battery", readingKey: "battery" },
+  ] as const;
+
+  const availableMetrics = useMemo(() => {
+    if (!reading) return [];
+    return allMetrics.filter(
+      (metric) => reading[metric.readingKey as keyof typeof reading] !== undefined
+    );
+  }, [reading]);
+
+  const defaultDashboardMetrics = useMemo(
+    () => availableMetrics.map((metric) => metric.key).slice(0, 4),
+    [availableMetrics]
+  );
+
+  const [dashboardSelection, setDashboardSelection] = useState<string[]>(
+    device.dashboardMetrics && device.dashboardMetrics.length > 0
+      ? device.dashboardMetrics
+      : defaultDashboardMetrics
+  );
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [isSavingDashboard, setIsSavingDashboard] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  useEffect(() => {
+    if (device.dashboardMetrics && device.dashboardMetrics.length > 0) {
+      setDashboardSelection(device.dashboardMetrics);
+    } else {
+      setDashboardSelection(defaultDashboardMetrics);
+    }
+    setDashboardError(null);
+  }, [device.dashboardMetrics, defaultDashboardMetrics]);
+
+  const availableMetricKeys = availableMetrics.map((metric) => metric.key);
+  const selectedMetrics = dashboardSelection
+    .filter((key) => availableMetricKeys.includes(key))
+    .filter((key) => key in metricConfig)
+    .slice(0, 4);
+
+  const handleToggleDashboardMetric = (metricKey: string) => {
+    setDashboardError(null);
+    const isSelected = dashboardSelection.includes(metricKey);
+    if (!isSelected && dashboardSelection.length >= 4) {
+      setDashboardError("You can show up to 4 metrics.");
+      return;
+    }
+    if (isSelected && dashboardSelection.length <= 1) {
+      setDashboardError("Select at least 1 metric.");
+      return;
+    }
+    setDashboardSelection((prev) =>
+      isSelected ? prev.filter((key) => key !== metricKey) : [...prev, metricKey]
+    );
+  };
+
+  const handleSaveDashboardMetrics = async () => {
+    if (dashboardSelection.length === 0 || dashboardSelection.length > 4) {
+      setDashboardError("Select 1 to 4 metrics.");
+      return;
+    }
+    setIsSavingDashboard(true);
+    setDashboardError(null);
+    try {
+      await updateDashboardMetrics({
+        deviceId: device._id,
+        dashboardMetrics: dashboardSelection,
+      });
+      setSettingsOpen(false);
+    } catch (err) {
+      setDashboardError(
+        err instanceof Error ? err.message : "Failed to update dashboard metrics"
+      );
+    } finally {
+      setIsSavingDashboard(false);
+    }
+  };
+  return (
+    <>
+      <Link href={`/dashboard/device/${device._id}`}>
+        <Card className="group relative overflow-hidden transition-all hover:shadow-lg w-full">
+          <CardContent className="pl-6 pr-8 pt-5 pb-5">
+            {/* Top: Device name, model, and status */}
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-bold group-hover:text-primary">
+                    {device.name}
+                  </h3>
+                  {/* Status dot */}
+                  <span
+                    className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${
+                      status.isOnline ? "bg-emerald-500" : "bg-red-500"
+                    }`}
+                    title={status.isOnline ? "Online" : "Offline"}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-foreground flex-shrink-0"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setSettingsOpen(true);
+                    }}
+                    aria-label="Configure dashboard metrics"
+                  >
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  {device.model ?? "Qingping"}
+                </p>
+              </div>
+              <ChevronRight className="h-5 w-5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 ml-2 flex-shrink-0" />
             </div>
-          ) : (
-            <div className="py-4 text-sm text-muted-foreground">
-              No readings yet
+
+            {/* Bottom: Radial gauges - always inline */}
+            {displayReading ? (
+              <div className="flex items-center justify-start gap-6">
+                {selectedMetrics.map((key) => {
+                  const metric = metricConfig[key as keyof typeof metricConfig];
+                  return (
+                    <RadialGaugeInline
+                      key={key}
+                      label={metric.label}
+                      value={metric.value}
+                      unit={metric.unit}
+                      level={metric.level}
+                    />
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-4 text-sm text-muted-foreground">
+                No readings yet
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </Link>
+
+      {/* Settings Dialog - outside the Link to prevent navigation issues */}
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Display Metrics</DialogTitle>
+            <DialogDescription>
+              Choose up to 4 metrics for this dashboard card.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-2">
+              {availableMetrics.map((metric) => (
+                <div
+                  key={`dashboard-${metric.key}`}
+                  className="flex items-center justify-between rounded-lg border px-3 py-2"
+                >
+                  <span className="text-sm">{metric.label}</span>
+                  <Switch
+                    checked={dashboardSelection.includes(metric.key)}
+                    onCheckedChange={() =>
+                      handleToggleDashboardMetric(metric.key)
+                    }
+                  />
+                </div>
+              ))}
+              {availableMetrics.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No metrics available yet.
+                </p>
+              )}
             </div>
-          )}
-        </CardContent>
-      </Card>
-    </Link>
+            {dashboardError && (
+              <p className="text-sm text-destructive">{dashboardError}</p>
+            )}
+            <div className="flex justify-end pt-2">
+              <Button
+                onClick={handleSaveDashboardMetrics}
+                disabled={isSavingDashboard || availableMetrics.length === 0}
+              >
+                {isSavingDashboard ? "Saving..." : "Save"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

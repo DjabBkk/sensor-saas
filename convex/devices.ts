@@ -17,6 +17,7 @@ const deviceShape = v.object({
   lastBattery: v.optional(v.number()),
   providerOffline: v.optional(v.boolean()),
   hiddenMetrics: v.optional(v.array(v.string())),
+  dashboardMetrics: v.optional(v.array(v.string())),
   createdAt: v.number(),
 });
 
@@ -91,6 +92,24 @@ export const updateHiddenMetrics = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     await ctx.db.patch(args.deviceId, { hiddenMetrics: args.hiddenMetrics });
+    return null;
+  },
+});
+
+export const updateDashboardMetrics = mutation({
+  args: {
+    deviceId: v.id("devices"),
+    dashboardMetrics: v.array(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    if (args.dashboardMetrics.length === 0) {
+      throw new Error("At least one dashboard metric must be selected.");
+    }
+    if (args.dashboardMetrics.length > 4) {
+      throw new Error("You can select up to 4 dashboard metrics.");
+    }
+    await ctx.db.patch(args.deviceId, { dashboardMetrics: args.dashboardMetrics });
     return null;
   },
 });

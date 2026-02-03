@@ -3,33 +3,27 @@
 import { useState, useEffect } from "react";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { useMutation } from "convex/react";
+import { useTheme } from "next-themes";
 
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Bell, Moon, Globe } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Bell, Moon } from "lucide-react";
 
 export default function SettingsPage() {
   const { isLoaded, userId } = useAuth();
   const { user } = useUser();
+  const { resolvedTheme, setTheme } = useTheme();
   const getOrCreateUser = useMutation(api.users.getOrCreateUser);
   const [convexUserId, setConvexUserId] = useState<Id<"users"> | null>(null);
   const [emailAlerts, setEmailAlerts] = useState(true);
   const [pushNotifications, setPushNotifications] = useState(false);
-  const [darkMode, setDarkMode] = useState(true);
-  const [timezone, setTimezone] = useState("auto");
-  const [units, setUnits] = useState("metric");
+  const isDarkMode = resolvedTheme === "dark";
 
   // Get or create Convex user
   useEffect(() => {
@@ -76,11 +70,15 @@ export default function SettingsPage() {
                 Receive email notifications when air quality is poor
               </p>
             </div>
-            <Switch
-              id="email-alerts"
-              checked={emailAlerts}
-              onCheckedChange={setEmailAlerts}
-            />
+            <div className="flex items-center gap-3">
+              <Badge variant="secondary">Coming soon</Badge>
+              <Switch
+                id="email-alerts"
+                checked={emailAlerts}
+                onCheckedChange={setEmailAlerts}
+                disabled
+              />
+            </div>
           </div>
           <Separator />
           <div className="flex items-center justify-between">
@@ -90,11 +88,15 @@ export default function SettingsPage() {
                 Get instant notifications on your device
               </p>
             </div>
-            <Switch
-              id="push-notifications"
-              checked={pushNotifications}
-              onCheckedChange={setPushNotifications}
-            />
+            <div className="flex items-center gap-3">
+              <Badge variant="secondary">Coming soon</Badge>
+              <Switch
+                id="push-notifications"
+                checked={pushNotifications}
+                onCheckedChange={setPushNotifications}
+                disabled
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -120,61 +122,16 @@ export default function SettingsPage() {
             </div>
             <Switch
               id="dark-mode"
-              checked={darkMode}
-              onCheckedChange={setDarkMode}
+              checked={isDarkMode}
+              onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
             />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Localization */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Globe className="h-5 w-5" />
-            Localization
-          </CardTitle>
-          <CardDescription>
-            Set your timezone and measurement preferences
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="timezone">Timezone</Label>
-              <Select value={timezone} onValueChange={setTimezone}>
-                <SelectTrigger id="timezone">
-                  <SelectValue placeholder="Select timezone" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="auto">Auto-detect</SelectItem>
-                  <SelectItem value="utc">UTC</SelectItem>
-                  <SelectItem value="est">Eastern Time (EST)</SelectItem>
-                  <SelectItem value="pst">Pacific Time (PST)</SelectItem>
-                  <SelectItem value="cet">Central European (CET)</SelectItem>
-                  <SelectItem value="jst">Japan Standard (JST)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="units">Measurement Units</Label>
-              <Select value={units} onValueChange={setUnits}>
-                <SelectTrigger id="units">
-                  <SelectValue placeholder="Select units" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="metric">Metric (°C)</SelectItem>
-                  <SelectItem value="imperial">Imperial (°F)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Save Button */}
       <div className="flex justify-end">
-        <Button>Save Changes</Button>
+        <Button disabled>Save Changes</Button>
       </div>
     </div>
   );

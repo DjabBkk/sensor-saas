@@ -55,6 +55,7 @@ export declare const api: {
         _creationTime: number;
         _id: Id<"devices">;
         createdAt: number;
+        dashboardMetrics?: Array<string>;
         hiddenMetrics?: Array<string>;
         lastBattery?: number;
         lastReadingAt?: number;
@@ -82,6 +83,7 @@ export declare const api: {
         _creationTime: number;
         _id: Id<"devices">;
         createdAt: number;
+        dashboardMetrics?: Array<string>;
         hiddenMetrics?: Array<string>;
         lastBattery?: number;
         lastReadingAt?: number;
@@ -101,6 +103,12 @@ export declare const api: {
       { deviceId: Id<"devices">; name: string },
       null
     >;
+    updateDashboardMetrics: FunctionReference<
+      "mutation",
+      "public",
+      { dashboardMetrics: Array<string>; deviceId: Id<"devices"> },
+      null
+    >;
     updateHiddenMetrics: FunctionReference<
       "mutation",
       "public",
@@ -118,14 +126,22 @@ export declare const api: {
     create: FunctionReference<
       "mutation",
       "public",
-      { deviceId: Id<"devices">; label?: string; userId: Id<"users"> },
+      {
+        description?: string;
+        deviceId: Id<"devices">;
+        label?: string;
+        size?: "small" | "medium" | "large";
+        userId: Id<"users">;
+      },
       {
         _creationTime: number;
         _id: Id<"embedTokens">;
         createdAt: number;
+        description?: string;
         deviceId: Id<"devices">;
         isRevoked: boolean;
         label?: string;
+        size?: "small" | "medium" | "large";
         token: string;
         userId: Id<"users">;
       }
@@ -138,9 +154,11 @@ export declare const api: {
         _creationTime: number;
         _id: Id<"embedTokens">;
         createdAt: number;
+        description?: string;
         deviceId: Id<"devices">;
         isRevoked: boolean;
         label?: string;
+        size?: "small" | "medium" | "large";
         token: string;
         userId: Id<"users">;
       }>
@@ -153,9 +171,11 @@ export declare const api: {
         _creationTime: number;
         _id: Id<"embedTokens">;
         createdAt: number;
+        description?: string;
         deviceId: Id<"devices">;
         isRevoked: boolean;
         label?: string;
+        size?: "small" | "medium" | "large";
         token: string;
         userId: Id<"users">;
       }>
@@ -294,6 +314,7 @@ export declare const api: {
           timezone?: string;
           userId: Id<"users">;
         };
+        embed: { description?: string; size?: "small" | "medium" | "large" };
         history: Array<{
           _creationTime: number;
           _id: Id<"readings">;
@@ -554,9 +575,11 @@ export declare const internal: {
         _creationTime: number;
         _id: Id<"embedTokens">;
         createdAt: number;
+        description?: string;
         deviceId: Id<"devices">;
         isRevoked: boolean;
         label?: string;
+        size?: "small" | "medium" | "large";
         token: string;
         userId: Id<"users">;
       }

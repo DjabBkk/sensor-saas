@@ -59,6 +59,7 @@ export type DataModel = {
   devices: {
     document: {
       createdAt: number;
+      dashboardMetrics?: Array<string>;
       hiddenMetrics?: Array<string>;
       lastBattery?: number;
       lastReadingAt?: number;
@@ -77,6 +78,7 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "createdAt"
+      | "dashboardMetrics"
       | "hiddenMetrics"
       | "lastBattery"
       | "lastReadingAt"
@@ -104,9 +106,11 @@ export type DataModel = {
   embedTokens: {
     document: {
       createdAt: number;
+      description?: string;
       deviceId: Id<"devices">;
       isRevoked: boolean;
       label?: string;
+      size?: "small" | "medium" | "large";
       token: string;
       userId: Id<"users">;
       _id: Id<"embedTokens">;
@@ -116,9 +120,11 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "createdAt"
+      | "description"
       | "deviceId"
       | "isRevoked"
       | "label"
+      | "size"
       | "token"
       | "userId";
     indexes: {

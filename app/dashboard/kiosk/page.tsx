@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -39,6 +40,7 @@ export default function KioskDashboardPage() {
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<Array<string>>([]);
   const [origin, setOrigin] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const isComingSoon = true;
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -94,6 +96,7 @@ export default function KioskDashboardPage() {
   );
 
   const handleToggleDevice = (deviceId: string) => {
+    if (isComingSoon) return;
     setSelectedDeviceIds((prev) =>
       prev.includes(deviceId)
         ? prev.filter((id) => id !== deviceId)
@@ -102,6 +105,7 @@ export default function KioskDashboardPage() {
   };
 
   const handleCreate = async () => {
+    if (isComingSoon) return;
     if (!convexUserId) {
       setError("User sync not ready yet.");
       return;
@@ -143,6 +147,7 @@ export default function KioskDashboardPage() {
   };
 
   const handleCopy = async (value: string) => {
+    if (isComingSoon) return;
     if (!value) return;
     await navigator.clipboard.writeText(value);
   };
@@ -150,13 +155,16 @@ export default function KioskDashboardPage() {
   return (
     <div className="space-y-6 p-8">
       <div>
-        <h1 className="text-2xl font-bold">Kiosk screens</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold">Kiosk screens</h1>
+          <Badge variant="secondary">Coming soon</Badge>
+        </div>
         <p className="text-sm text-muted-foreground">
           Create fullscreen kiosk links for screens and wall displays.
         </p>
       </div>
 
-      <Card>
+      <Card className={isComingSoon ? "opacity-60" : undefined}>
         <CardHeader>
           <CardTitle>Create kiosk</CardTitle>
         </CardHeader>
@@ -169,11 +177,16 @@ export default function KioskDashboardPage() {
                 value={label}
                 onChange={(event) => setLabel(event.target.value)}
                 placeholder="Lobby wall, Office screen, etc."
+                disabled={isComingSoon}
               />
             </div>
             <div className="space-y-2">
               <Label>Mode</Label>
-              <Select value={mode} onValueChange={(val) => setMode(val as KioskMode)}>
+              <Select
+                value={mode}
+                onValueChange={(val) => setMode(val as KioskMode)}
+                disabled={isComingSoon}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -185,7 +198,11 @@ export default function KioskDashboardPage() {
             </div>
             <div className="space-y-2">
               <Label>Theme</Label>
-              <Select value={theme} onValueChange={(val) => setTheme(val as KioskTheme)}>
+              <Select
+                value={theme}
+                onValueChange={(val) => setTheme(val as KioskTheme)}
+                disabled={isComingSoon}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -202,6 +219,7 @@ export default function KioskDashboardPage() {
                 value={refreshInterval}
                 onChange={(event) => setRefreshInterval(event.target.value)}
                 placeholder="30"
+                disabled={isComingSoon}
               />
             </div>
           </div>
@@ -212,6 +230,7 @@ export default function KioskDashboardPage() {
               <Select
                 value={selectedDeviceId ?? undefined}
                 onValueChange={setSelectedDeviceId}
+                disabled={isComingSoon}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select device" />
@@ -235,6 +254,7 @@ export default function KioskDashboardPage() {
                       type="checkbox"
                       checked={selectedDeviceIds.includes(device._id)}
                       onChange={() => handleToggleDevice(device._id)}
+                      disabled={isComingSoon}
                     />
                     {device.name}
                   </label>
@@ -244,11 +264,13 @@ export default function KioskDashboardPage() {
           </div>
 
           {error ? <p className="text-sm text-red-500">{error}</p> : null}
-          <Button onClick={handleCreate}>Create kiosk link</Button>
+          <Button onClick={handleCreate} disabled={isComingSoon}>
+            Create kiosk link
+          </Button>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className={isComingSoon ? "opacity-60" : undefined}>
         <CardHeader>
           <CardTitle>Active kiosks</CardTitle>
         </CardHeader>
@@ -268,10 +290,14 @@ export default function KioskDashboardPage() {
                     <p className="text-xs text-muted-foreground">{url}</p>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => handleCopy(url)}>
+                    <Button variant="outline" onClick={() => handleCopy(url)} disabled={isComingSoon}>
                       Copy Link
                     </Button>
-                    <Button variant="outline" onClick={() => revokeKiosk({ configId: kiosk._id })}>
+                    <Button
+                      variant="outline"
+                      onClick={() => revokeKiosk({ configId: kiosk._id })}
+                      disabled={isComingSoon}
+                    >
                       Revoke
                     </Button>
                   </div>

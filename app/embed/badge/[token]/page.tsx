@@ -5,7 +5,9 @@ import { useSearchParams } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { getDeviceStatus } from "@/lib/deviceStatus";
-import { EmbedBadge } from "@/components/embed/EmbedBadge";
+import { BadgeSmall } from "@/components/embed/BadgeSmall";
+import { BadgeMedium } from "@/components/embed/BadgeMedium";
+import { BadgeLarge } from "@/components/embed/BadgeLarge";
 
 export default function EmbedBadgePage({
   params,
@@ -15,6 +17,7 @@ export default function EmbedBadgePage({
   const { token } = use(params);
   const searchParams = useSearchParams();
   const theme = searchParams.get("theme");
+  const sizeParam = searchParams.get("size");
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -51,13 +54,32 @@ export default function EmbedBadgePage({
             providerOffline: data.device.providerOffline,
           });
           const reading = status.isOnline ? data.latestReading : null;
+          const size =
+            sizeParam === "small" || sizeParam === "medium" || sizeParam === "large"
+              ? sizeParam
+              : data.embed.size ?? "medium";
 
           return (
-            <EmbedBadge
-              deviceName={data.device.name}
-              isOnline={status.isOnline}
-              pm25={reading?.pm25}
-            />
+            <>
+              {size === "small" && (
+                <BadgeSmall isOnline={status.isOnline} pm25={reading?.pm25} />
+              )}
+              {size === "medium" && (
+                <BadgeMedium
+                  title={data.embed.description}
+                  isOnline={status.isOnline}
+                  pm25={reading?.pm25}
+                />
+              )}
+              {size === "large" && (
+                <BadgeLarge
+                  title={data.embed.description}
+                  isOnline={status.isOnline}
+                  pm25={reading?.pm25}
+                  co2={reading?.co2}
+                />
+              )}
+            </>
           );
         })()}
       </div>

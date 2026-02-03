@@ -26,6 +26,7 @@ type DeviceSettingsDialogProps = {
   deviceId: Id<"devices">;
   deviceName: string;
   hiddenMetrics?: string[];
+  availableMetrics?: string[];
   trigger: React.ReactNode;
 };
 
@@ -35,6 +36,7 @@ const METRIC_OPTIONS = [
   { key: "temperature", label: "Temperature" },
   { key: "humidity", label: "Humidity" },
   { key: "pm10", label: "PM10" },
+  { key: "voc", label: "TVOC" },
   { key: "battery", label: "Battery" },
 ];
 
@@ -42,6 +44,7 @@ export function DeviceSettingsDialog({
   deviceId,
   deviceName,
   hiddenMetrics,
+  availableMetrics,
   trigger,
 }: DeviceSettingsDialogProps) {
   const router = useRouter();
@@ -64,6 +67,25 @@ export function DeviceSettingsDialog({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const availableMetricSet = useMemo(
+    () => new Set(availableMetrics ?? METRIC_OPTIONS.map((metric) => metric.key)),
+    [availableMetrics]
+  );
+
+  const availableMetricKeys = useMemo(
+    () => METRIC_OPTIONS.map((metric) => metric.key).filter((key) => availableMetricSet.has(key)),
+    [availableMetricSet]
+  );
+
+  const hiddenMetricsSet = useMemo(
+    () => new Set(hiddenMetricKeys),
+    [hiddenMetricKeys]
+  );
+
+  const visibleCount =
+    availableMetricKeys.length -
+    availableMetricKeys.filter((key) => hiddenMetricsSet.has(key)).length;
+
   useEffect(() => {
     if (open) {
       setRenameValue(deviceName);
@@ -71,14 +93,11 @@ export function DeviceSettingsDialog({
       setMetricsError(null);
       setRenameError(null);
     }
-  }, [deviceName, hiddenMetrics, open]);
-
-  const hiddenMetricsSet = useMemo(
-    () => new Set(hiddenMetricKeys),
-    [hiddenMetricKeys]
-  );
-
-  const visibleCount = METRIC_OPTIONS.length - hiddenMetricsSet.size;
+  }, [
+    deviceName,
+    hiddenMetrics,
+    open,
+  ]);
 
   const handleToggleMetric = async (metricKey: string) => {
     setMetricsError(null);
@@ -164,7 +183,9 @@ export function DeviceSettingsDialog({
                 </p>
               </div>
               <div className="space-y-3">
-                {METRIC_OPTIONS.map((metric) => (
+                {METRIC_OPTIONS.filter((metric) =>
+                  availableMetricSet.has(metric.key)
+                ).map((metric) => (
                   <div
                     key={metric.key}
                     className="flex items-center justify-between rounded-lg border px-3 py-2"
@@ -180,6 +201,11 @@ export function DeviceSettingsDialog({
                     />
                   </div>
                 ))}
+                {availableMetricSet.size === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    No metrics available yet.
+                  </p>
+                )}
               </div>
               {metricsError && (
                 <p className="text-sm text-destructive">{metricsError}</p>

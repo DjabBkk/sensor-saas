@@ -11,6 +11,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getDeviceStatus } from "@/lib/deviceStatus";
+import { BadgeSmall } from "@/components/embed/BadgeSmall";
+import { BadgeMedium } from "@/components/embed/BadgeMedium";
+import { BadgeLarge } from "@/components/embed/BadgeLarge";
+import { CardSmall } from "@/components/embed/CardSmall";
+import { CardMedium } from "@/components/embed/CardMedium";
+import { CardLarge } from "@/components/embed/CardLarge";
 import {
   Select,
   SelectContent,
@@ -19,8 +26,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-type EmbedStyle = "badge" | "card" | "full";
+type EmbedStyle = "badge" | "card";
 type EmbedTheme = "light" | "dark";
+type EmbedSize = "small" | "medium" | "large";
 
 export default function DeviceEmbedPage({
   params,
@@ -37,8 +45,10 @@ export default function DeviceEmbedPage({
 
   const [convexUserId, setConvexUserId] = useState<Id<"users"> | null>(null);
   const [label, setLabel] = useState("");
+  const [description, setDescription] = useState("");
   const [style, setStyle] = useState<EmbedStyle>("card");
   const [theme, setTheme] = useState<EmbedTheme>("dark");
+  const [size, setSize] = useState<EmbedSize>("medium");
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
   const [origin, setOrigin] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +90,13 @@ export default function DeviceEmbedPage({
   const tokens = useQuery(api.embedTokens.listForDevice, {
     deviceId: deviceId as Id<"devices">,
   });
+  const latestReading = useQuery(api.readings.latest, {
+    deviceId: deviceId as Id<"devices">,
+  });
+  const history = useQuery(api.readings.history, {
+    deviceId: deviceId as Id<"devices">,
+    limit: 96,
+  });
 
   const activeTokens = useMemo(
     () => (tokens ?? []).filter((token) => !token.isRevoked),
@@ -93,18 +110,41 @@ export default function DeviceEmbedPage({
   }, [activeTokens, selectedTokenId]);
 
   const selectedToken = activeTokens.find((token) => token._id === selectedTokenId);
+
+  useEffect(() => {
+    if (!selectedToken) return;
+    if (selectedToken.description !== undefined) {
+      setDescription(selectedToken.description ?? "");
+    }
+    if (selectedToken.size) {
+      setSize(selectedToken.size);
+    }
+  }, [selectedToken]);
+  const widgetDimensions = useMemo(() => {
+    if (style === "badge") {
+      if (size === "small") return { width: 160, height: 40 };
+      if (size === "large") return { width: 360, height: 88 };
+      return { width: 240, height: 64 };
+    }
+    if (size === "small") return { width: 280, height: 180 };
+    if (size === "large") return { width: 420, height: 320 };
+    return { width: 320, height: 220 };
+  }, [size, style]);
+
   const embedUrl = selectedToken
-    ? `${origin}/embed/${style}/${selectedToken.token}?theme=${theme}`
+    ? `${origin}/embed/${style}/${selectedToken.token}?theme=${theme}&size=${size}`
     : "";
 
   const iframeSnippet = embedUrl
-    ? `<iframe src="${embedUrl}" width="320" height="200" frameborder="0"></iframe>`
+    ? `<iframe src="${embedUrl}" width="${widgetDimensions.width}" height="${widgetDimensions.height}" frameborder="0"></iframe>`
     : "";
 
   const scriptSnippet = selectedToken
-    ? `<div id="airview-widget" data-token="${selectedToken.token}" data-style="${style}" data-theme="${theme}"></div>
+    ? `<div id="airview-widget" data-token="${selectedToken.token}" data-style="${style}" data-theme="${theme}" data-size="${size}"></div>
 <script src="${origin}/embed.js"></script>`
     : "";
+  const previewTitle = selectedToken?.description ?? description;
+  const previewHistory = history ?? [];
 
   const handleCreate = async () => {
     if (!convexUserId) {
@@ -117,8 +157,11 @@ export default function DeviceEmbedPage({
         userId: convexUserId,
         deviceId: deviceId as Id<"devices">,
         label: label || undefined,
+        description: description || undefined,
+        size,
       });
       setLabel("");
+      setDescription("");
       setSelectedTokenId(created._id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create token.");
@@ -153,134 +196,250 @@ export default function DeviceEmbedPage({
           Generate kiosk or website embeds for {device?.name ?? "this device"}.
         </p>
       </div>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Create an embed token</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="label">Label (optional)</Label>
+                <Input
+                  id="label"
+                  value={label}
+                  onChange={(event) => setLabel(event.target.value)}
+                  placeholder="Lobby screen, Website badge, etc."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="description">Widget title (optional)</Label>
+                <Input
+                  id="description"
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  placeholder="Air Quality at Sprouts Kindergarten"
+                />
+              </div>
+              {error ? <p className="text-sm text-red-500">{error}</p> : null}
+              <Button onClick={handleCreate}>Create Token</Button>
+            </CardContent>
+          </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Create an embed token</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="label">Label (optional)</Label>
-            <Input
-              id="label"
-              value={label}
-              onChange={(event) => setLabel(event.target.value)}
-              placeholder="Lobby screen, Website badge, etc."
-            />
-          </div>
-          {error ? <p className="text-sm text-red-500">{error}</p> : null}
-          <Button onClick={handleCreate}>Create Token</Button>
-        </CardContent>
-      </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Manage tokens</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {activeTokens.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No active tokens yet.</p>
+              ) : (
+                activeTokens.map((token) => (
+                  <div
+                    key={token._id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-4 py-3"
+                  >
+                    <div>
+                      <p className="text-sm font-medium">{token.label ?? "Embed token"}</p>
+                      {token.description && (
+                        <p className="text-xs text-muted-foreground">{token.description}</p>
+                      )}
+                      <p className="text-xs text-muted-foreground">{token.token}</p>
+                    </div>
+                    <Button variant="outline" onClick={() => handleRevoke(token._id)}>
+                      Revoke
+                    </Button>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Manage tokens</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {activeTokens.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No active tokens yet.</p>
-          ) : (
-            activeTokens.map((token) => (
-              <div
-                key={token._id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-4 py-3"
-              >
-                <div>
-                  <p className="text-sm font-medium">{token.label ?? "Embed token"}</p>
-                  <p className="text-xs text-muted-foreground">{token.token}</p>
+          <Card>
+            <CardHeader>
+              <CardTitle>Snippet generator</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <Label>Token</Label>
+                  <Select
+                    value={selectedTokenId ?? undefined}
+                    onValueChange={setSelectedTokenId}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select token" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activeTokens.map((token) => (
+                        <SelectItem key={token._id} value={token._id}>
+                          {token.label ?? token.token.slice(0, 8)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <Button variant="outline" onClick={() => handleRevoke(token._id)}>
-                  Revoke
-                </Button>
+                <div className="space-y-2">
+                  <Label>Widget style</Label>
+                  <Select value={style} onValueChange={(val) => setStyle(val as EmbedStyle)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="badge">Badge</SelectItem>
+                      <SelectItem value="card">Card</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Size</Label>
+                  <Select value={size} onValueChange={(val) => setSize(val as EmbedSize)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="small">Small</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="large">Large</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Theme</Label>
+                  <Select value={theme} onValueChange={(val) => setTheme(val as EmbedTheme)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="dark">Dark</SelectItem>
+                      <SelectItem value="light">Light</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Snippet generator</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label>Token</Label>
-              <Select
-                value={selectedTokenId ?? undefined}
-                onValueChange={setSelectedTokenId}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select token" />
-                </SelectTrigger>
-                <SelectContent>
-                  {activeTokens.map((token) => (
-                    <SelectItem key={token._id} value={token._id}>
-                      {token.label ?? token.token.slice(0, 8)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Widget style</Label>
-              <Select value={style} onValueChange={(val) => setStyle(val as EmbedStyle)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="badge">Badge</SelectItem>
-                  <SelectItem value="card">Card</SelectItem>
-                  <SelectItem value="full">Full</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Theme</Label>
-              <Select value={theme} onValueChange={(val) => setTheme(val as EmbedTheme)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="dark">Dark</SelectItem>
-                  <SelectItem value="light">Light</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label>Embed URL</Label>
+                  <div className="flex gap-2">
+                    <Input value={embedUrl} readOnly />
+                    <Button variant="outline" onClick={() => handleCopy(embedUrl)}>
+                      Copy
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Iframe snippet</Label>
+                  <div className="flex gap-2">
+                    <Input value={iframeSnippet} readOnly />
+                    <Button variant="outline" onClick={() => handleCopy(iframeSnippet)}>
+                      Copy
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Script snippet</Label>
+                  <div className="flex gap-2">
+                    <Input value={scriptSnippet} readOnly />
+                    <Button variant="outline" onClick={() => handleCopy(scriptSnippet)}>
+                      Copy
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
-          <div className="space-y-3">
-            <div className="space-y-2">
-              <Label>Embed URL</Label>
-              <div className="flex gap-2">
-                <Input value={embedUrl} readOnly />
-                <Button variant="outline" onClick={() => handleCopy(embedUrl)}>
-                  Copy
-                </Button>
+        <Card className="h-fit">
+          <CardHeader>
+            <CardTitle>Widget preview</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!device ? (
+              <p className="text-sm text-muted-foreground">Loading preview...</p>
+            ) : (
+              <div className={theme === "dark" ? "dark" : ""}>
+                <div className="flex items-center justify-center rounded-lg border border-border bg-background p-6 text-foreground">
+                  {(() => {
+                    const status = getDeviceStatus({
+                      lastReadingAt: device.lastReadingAt,
+                      lastBattery: device.lastBattery,
+                      providerOffline: device.providerOffline,
+                    });
+                    const reading = status.isOnline ? latestReading ?? null : null;
+
+                    if (style === "badge") {
+                      if (size === "small") {
+                        return (
+                          <BadgeSmall
+                            isOnline={status.isOnline}
+                            pm25={reading?.pm25}
+                          />
+                        );
+                      }
+                      if (size === "large") {
+                        return (
+                          <BadgeLarge
+                            title={previewTitle}
+                            isOnline={status.isOnline}
+                            pm25={reading?.pm25}
+                            co2={reading?.co2}
+                          />
+                        );
+                      }
+                      return (
+                        <BadgeMedium
+                          title={previewTitle}
+                          isOnline={status.isOnline}
+                          pm25={reading?.pm25}
+                        />
+                      );
+                    }
+
+                    if (size === "small") {
+                      return (
+                        <CardSmall
+                          title={previewTitle}
+                          isOnline={status.isOnline}
+                          pm25={reading?.pm25}
+                          co2={reading?.co2}
+                        />
+                      );
+                    }
+                    if (size === "large") {
+                      return (
+                        <CardLarge
+                          title={previewTitle}
+                          isOnline={status.isOnline}
+                          pm25={reading?.pm25}
+                          co2={reading?.co2}
+                          tempC={reading?.tempC}
+                          rh={reading?.rh}
+                          history={previewHistory.map((point) => ({
+                            ts: point.ts,
+                            pm25: point.pm25,
+                          }))}
+                        />
+                      );
+                    }
+                    return (
+                      <CardMedium
+                        title={previewTitle}
+                        isOnline={status.isOnline}
+                        pm25={reading?.pm25}
+                        co2={reading?.co2}
+                        tempC={reading?.tempC}
+                        rh={reading?.rh}
+                      />
+                    );
+                  })()}
+                </div>
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Iframe snippet</Label>
-              <div className="flex gap-2">
-                <Input value={iframeSnippet} readOnly />
-                <Button variant="outline" onClick={() => handleCopy(iframeSnippet)}>
-                  Copy
-                </Button>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Script snippet</Label>
-              <div className="flex gap-2">
-                <Input value={scriptSnippet} readOnly />
-                <Button variant="outline" onClick={() => handleCopy(scriptSnippet)}>
-                  Copy
-                </Button>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

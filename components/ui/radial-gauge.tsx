@@ -160,7 +160,7 @@ export function RadialGaugeInline({
     : "--";
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-3 flex-shrink-0">
       <ChartContainer
         config={chartConfig}
         className="aspect-square w-[72px] h-[72px] flex-shrink-0"

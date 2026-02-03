@@ -5,7 +5,9 @@ import { useSearchParams } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { getDeviceStatus } from "@/lib/deviceStatus";
-import { EmbedCard } from "@/components/embed/EmbedCard";
+import { CardSmall } from "@/components/embed/CardSmall";
+import { CardMedium } from "@/components/embed/CardMedium";
+import { CardLarge } from "@/components/embed/CardLarge";
 
 export default function EmbedCardPage({
   params,
@@ -15,6 +17,7 @@ export default function EmbedCardPage({
   const { token } = use(params);
   const searchParams = useSearchParams();
   const theme = searchParams.get("theme");
+  const sizeParam = searchParams.get("size");
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -51,17 +54,46 @@ export default function EmbedCardPage({
             providerOffline: data.device.providerOffline,
           });
           const reading = status.isOnline ? data.latestReading : null;
+          const size =
+            sizeParam === "small" || sizeParam === "medium" || sizeParam === "large"
+              ? sizeParam
+              : data.embed.size ?? "medium";
 
           return (
-        <EmbedCard
-          deviceName={data.device.name}
-          model={data.device.model ?? undefined}
-          isOnline={status.isOnline}
-          pm25={reading?.pm25}
-          co2={reading?.co2}
-          tempC={reading?.tempC}
-          rh={reading?.rh}
-        />
+            <>
+              {size === "small" && (
+                <CardSmall
+                  title={data.embed.description}
+                  isOnline={status.isOnline}
+                  pm25={reading?.pm25}
+                  co2={reading?.co2}
+                />
+              )}
+              {size === "medium" && (
+                <CardMedium
+                  title={data.embed.description}
+                  isOnline={status.isOnline}
+                  pm25={reading?.pm25}
+                  co2={reading?.co2}
+                  tempC={reading?.tempC}
+                  rh={reading?.rh}
+                />
+              )}
+              {size === "large" && (
+                <CardLarge
+                  title={data.embed.description}
+                  isOnline={status.isOnline}
+                  pm25={reading?.pm25}
+                  co2={reading?.co2}
+                  tempC={reading?.tempC}
+                  rh={reading?.rh}
+                  history={data.history.map((point) => ({
+                    ts: point.ts,
+                    pm25: point.pm25,
+                  }))}
+                />
+              )}
+            </>
           );
         })()}
       </div>

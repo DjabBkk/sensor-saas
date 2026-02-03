@@ -295,9 +295,19 @@ export const pollAllReadings = internalAction({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
+    const startTime = Date.now();
+    console.log("[POLLING] Starting polling cycle at", new Date().toISOString());
+    
     const configs = await ctx.runQuery(internal.providers.listAllConfigs, {});
+    const qingpingConfigs = configs.filter(c => c.provider === "qingping");
+    
+    console.log(`[POLLING] Found ${qingpingConfigs.length} Qingping configurations to poll`);
 
-    for (const config of configs) {
+    let totalDevicesProcessed = 0;
+    let totalReadingsProcessed = 0;
+    let errors = 0;
+
+    for (const config of qingpingConfigs) {
       if (config.provider !== "qingping") {
         continue;
       }
@@ -309,11 +319,12 @@ export const pollAllReadings = internalAction({
       if (!config.tokenExpiresAt || config.tokenExpiresAt <= now + 5 * 60 * 1000) {
         // Token expired or expiring soon, refresh it
         if (!config.appKey || !config.appSecret) {
-          console.warn("[pollAllReadings] Token expired and no credentials available to refresh for user:", config.userId);
+          console.warn("[POLLING] Token expired and no credentials available to refresh for user:", config.userId);
+          errors++;
           continue;
         }
         
-        console.log("[pollAllReadings] Token expired, refreshing for user:", config.userId);
+        console.log("[POLLING] Token expired, refreshing for user:", config.userId);
         const tokenResult = await getAccessToken(config.appKey, config.appSecret);
         accessToken = tokenResult.accessToken;
         
@@ -328,10 +339,11 @@ export const pollAllReadings = internalAction({
       let devices;
       try {
         devices = await listDevices(accessToken);
+        console.log(`[POLLING] Fetched ${devices.length} devices for user: ${config.userId}`);
       } catch (error: any) {
         // If we get a 401, try refreshing the token once more
         if (error?.message?.includes("401") && config.appKey && config.appSecret) {
-          console.log("[pollAllReadings] Got 401, refreshing token and retrying for user:", config.userId);
+          console.log("[POLLING] Got 401, refreshing token and retrying for user:", config.userId);
           const tokenResult = await getAccessToken(config.appKey, config.appSecret);
           accessToken = tokenResult.accessToken;
           
@@ -344,28 +356,31 @@ export const pollAllReadings = internalAction({
           // Retry once
           try {
             devices = await listDevices(accessToken);
+            console.log(`[POLLING] Retry successful, fetched ${devices.length} devices for user: ${config.userId}`);
           } catch (retryError) {
-            console.error("[pollAllReadings] Failed after token refresh for user:", config.userId, retryError);
+            console.error("[POLLING] Failed after token refresh for user:", config.userId, retryError);
+            errors++;
             continue;
           }
         } else {
-          console.error("[pollAllReadings] API error for user:", config.userId, error);
+          console.error("[POLLING] API error for user:", config.userId, error);
+          errors++;
           continue;
         }
       }
 
-    for (const device of devices) {
-      const isDeleted: boolean = await ctx.runQuery(
-        internal.devices.isDeletedForUser,
-        {
-          userId: config.userId,
-          provider: config.provider,
-          providerDeviceId: device.info.mac,
-        },
-      );
-      if (isDeleted) {
-        continue;
-      }
+      for (const device of devices) {
+        const isDeleted: boolean = await ctx.runQuery(
+          internal.devices.isDeletedForUser,
+          {
+            userId: config.userId,
+            provider: config.provider,
+            providerDeviceId: device.info.mac,
+          },
+        );
+        if (isDeleted) {
+          continue;
+        }
 
         const reading = mapQingpingReading(device.data);
         if (!reading) {
@@ -406,6 +421,9 @@ export const pollAllReadings = internalAction({
           pressure: reading.pressure,
           battery: reading.battery,
         });
+        
+        totalDevicesProcessed++;
+        totalReadingsProcessed++;
       }
 
       // Update last sync time
@@ -413,6 +431,9 @@ export const pollAllReadings = internalAction({
         providerConfigId: config._id,
       });
     }
+
+    const duration = Date.now() - startTime;
+    console.log(`[POLLING] Completed polling cycle in ${duration}ms - Processed ${totalReadingsProcessed} readings from ${totalDevicesProcessed} devices, ${errors} errors`);
 
     return null;
   },
