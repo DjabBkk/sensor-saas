@@ -281,7 +281,8 @@ export function ConnectDeviceDialog({
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="text-sm text-muted-foreground">
-                  Sign up at developer.cleargrass.com with the same login.
+                  After signing up to the Qingping+ App a developer account at https://developer.qingping.co/login was automatically created. 
+                  Login in with the same credentials as the Qingping+ App.
                 </CardContent>
               </Card>
             )}
