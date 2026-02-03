@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth, useUser } from "@clerk/nextjs";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -10,16 +10,23 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { getPM25Level, getCO2Level } from "./_components/ReadingGauge";
-import { Plus, Wifi, WifiOff, ChevronRight } from "lucide-react";
+import { getDeviceStatus } from "@/lib/deviceStatus";
+import { getPM25Level, getCO2Level } from "@/lib/aqi-levels";
+import { RadialGaugeInline } from "@/components/ui/radial-gauge";
+import { Plus, ChevronRight } from "lucide-react";
+import { useAddDeviceDialog } from "./_components/add-device-context";
 
 export default function DashboardPage() {
   const router = useRouter();
   const { isLoaded, userId } = useAuth();
   const { user } = useUser();
   const getOrCreateUser = useMutation(api.users.getOrCreateUser);
+  const syncDevices = useAction(api.providersActions.syncDevicesForUserPublic);
+  const { openDialog } = useAddDeviceDialog();
   const [convexUserId, setConvexUserId] = useState<Id<"users"> | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -53,6 +60,35 @@ export default function DashboardPage() {
     convexUserId ? { userId: convexUserId } : "skip"
   );
 
+  const handleSyncNow = async () => {
+    if (!convexUserId || syncing) return;
+    setSyncing(true);
+    setSyncMessage(null);
+
+    try {
+      await syncDevices({ userId: convexUserId, provider: "qingping" });
+      setLastSyncedAt(Date.now());
+      setSyncMessage("Sync completed. Updating device status...");
+      // Clear success message after 3 seconds
+      setTimeout(() => setSyncMessage(null), 3000);
+    } catch (error: any) {
+      // Check if it's a "function not found" error (Convex dev still syncing)
+      const errorMessage = error?.message || String(error);
+      if (errorMessage.includes("Could not find public function") || 
+          errorMessage.includes("Did you forget to run")) {
+        setSyncMessage("Sync function not ready yet. Please wait a moment and try again.");
+      } else {
+        setSyncMessage("Sync failed. Please check your provider connection.");
+      }
+      // Don't log to console in production - only in dev
+      if (process.env.NODE_ENV === "development") {
+        console.error("Sync error:", error);
+      }
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   if (!convexUserId) {
     return null;
   }
@@ -60,11 +96,30 @@ export default function DashboardPage() {
   return (
     <div className="p-8">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="mt-1 text-muted-foreground">
-          Overview of your air quality monitors
-        </p>
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Dashboard</h1>
+          <p className="mt-1 text-muted-foreground">
+            Overview of your air quality monitors
+          </p>
+        </div>
+        <div className="flex flex-col items-start gap-2 sm:items-end">
+          <Button
+            variant="outline"
+            onClick={handleSyncNow}
+            disabled={syncing}
+          >
+            {syncing ? "Syncing..." : "Sync now"}
+          </Button>
+          {lastSyncedAt && (
+            <span className="text-xs text-muted-foreground">
+              Last synced: {formatRelativeTime(lastSyncedAt)}
+            </span>
+          )}
+          {syncMessage && (
+            <span className="text-xs text-muted-foreground">{syncMessage}</span>
+          )}
+        </div>
       </div>
 
       {/* Empty State */}
@@ -76,11 +131,11 @@ export default function DashboardPage() {
             </div>
             <h2 className="text-xl font-semibold">No devices connected</h2>
             <p className="mt-2 max-w-sm text-muted-foreground">
-              Connect your first Qingping air quality monitor to start tracking
-              your indoor air quality.
+              Connect your first air quality monitor to start tracking your
+              indoor air quality.
             </p>
-            <Button asChild className="mt-6">
-              <Link href="/onboarding/connect">Connect Device</Link>
+            <Button className="mt-6" onClick={openDialog}>
+              Connect Device
             </Button>
           </CardContent>
         </Card>
@@ -98,7 +153,7 @@ export default function DashboardPage() {
   );
 }
 
-// Mini device card for the overview
+// Mini device card for the overview - name on top, gauges below
 function DeviceOverviewCard({
   device,
 }: {
@@ -107,102 +162,87 @@ function DeviceOverviewCard({
     name: string;
     model?: string;
     lastReadingAt?: number;
+    lastBattery?: number;
+    providerOffline?: boolean;
   };
 }) {
   const reading = useQuery(api.readings.latest, { deviceId: device._id });
 
+  const lastReadingAt = reading?.ts ?? device.lastReadingAt;
+  const status = getDeviceStatus({
+    lastReadingAt,
+    lastBattery: device.lastBattery,
+    providerOffline: device.providerOffline,
+  });
+
+  // Show readings even when offline (so users can see last known values)
+  const displayReading = reading;
   const pm25Level =
-    reading?.pm25 !== undefined ? getPM25Level(reading.pm25) : null;
+    displayReading?.pm25 !== undefined ? getPM25Level(displayReading.pm25) : null;
   const co2Level =
-    reading?.co2 !== undefined ? getCO2Level(reading.co2) : null;
-
-  const isOnline =
-    device.lastReadingAt && Date.now() - device.lastReadingAt < 30 * 60 * 1000;
-
+    displayReading?.co2 !== undefined ? getCO2Level(displayReading.co2) : null;
   return (
     <Link href={`/dashboard/device/${device._id}`}>
-      <Card className="group relative overflow-hidden transition-all hover:shadow-lg">
-        <CardContent className="p-6">
-          {/* Header */}
-          <div className="mb-4 flex items-start justify-between">
+      <Card className="group relative overflow-hidden transition-all hover:shadow-lg w-full">
+        <CardContent className="pl-6 pr-8 pt-5 pb-5">
+          {/* Top: Device name, model, and status */}
+          <div className="flex items-start justify-between mb-4">
             <div>
-              <h3 className="font-semibold group-hover:text-primary">
-                {device.name}
-              </h3>
-              <p className="text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-bold group-hover:text-primary">
+                  {device.name}
+                </h3>
+                {/* Status dot */}
+                <span
+                  className={`h-2.5 w-2.5 rounded-full ${
+                    status.isOnline ? "bg-emerald-500" : "bg-red-500"
+                  }`}
+                  title={status.isOnline ? "Online" : "Offline"}
+                />
+              </div>
+              <p className="text-sm text-muted-foreground mt-0.5">
                 {device.model ?? "Qingping"}
               </p>
             </div>
-            <Badge variant={isOnline ? "default" : "secondary"} className="gap-1">
-              {isOnline ? (
-                <>
-                  <Wifi className="h-3 w-3" />
-                  Online
-                </>
-              ) : (
-                <>
-                  <WifiOff className="h-3 w-3" />
-                  Offline
-                </>
-              )}
-            </Badge>
+            <ChevronRight className="h-5 w-5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 ml-4" />
           </div>
 
-          {/* Key Metrics */}
-          {reading ? (
-            <div className="grid grid-cols-2 gap-4">
-              {/* PM2.5 */}
-              <div>
-                <p className="text-xs text-muted-foreground">PM2.5</p>
-                <p
-                  className={`text-2xl font-bold ${pm25Level?.color ?? "text-foreground"}`}
-                >
-                  {reading.pm25 ?? "--"}
-                  <span className="ml-1 text-sm font-normal text-muted-foreground">
-                    µg/m³
-                  </span>
-                </p>
-              </div>
-              {/* CO2 */}
-              <div>
-                <p className="text-xs text-muted-foreground">CO₂</p>
-                <p
-                  className={`text-2xl font-bold ${co2Level?.color ?? "text-foreground"}`}
-                >
-                  {reading.co2 ?? "--"}
-                  <span className="ml-1 text-sm font-normal text-muted-foreground">
-                    ppm
-                  </span>
-                </p>
-              </div>
-              {/* Temperature */}
-              <div>
-                <p className="text-xs text-muted-foreground">Temp</p>
-                <p className="text-lg font-semibold">
-                  {reading.tempC !== undefined ? `${reading.tempC}°C` : "--"}
-                </p>
-              </div>
-              {/* Humidity */}
-              <div>
-                <p className="text-xs text-muted-foreground">Humidity</p>
-                <p className="text-lg font-semibold">
-                  {reading.rh !== undefined ? `${reading.rh}%` : "--"}
-                </p>
-              </div>
+          {/* Bottom: Radial gauges - left aligned */}
+          {displayReading ? (
+            <div className="flex items-center justify-start gap-6">
+              <RadialGaugeInline
+                label="PM2.5"
+                value={displayReading.pm25}
+                unit="µg/m³"
+                level={pm25Level}
+              />
+              <RadialGaugeInline
+                label="CO₂"
+                value={displayReading.co2}
+                unit="ppm"
+                level={co2Level}
+              />
             </div>
           ) : (
-            <div className="py-4 text-center text-sm text-muted-foreground">
+            <div className="py-4 text-sm text-muted-foreground">
               No readings yet
             </div>
           )}
-
-          {/* View Details Arrow */}
-          <div className="mt-4 flex items-center justify-end text-xs text-muted-foreground group-hover:text-primary">
-            View details
-            <ChevronRight className="ml-1 h-3 w-3 transition-transform group-hover:translate-x-1" />
-          </div>
         </CardContent>
       </Card>
     </Link>
   );
+}
+
+function formatRelativeTime(timestampMs: number) {
+  const diffMs = Date.now() - timestampMs;
+  if (diffMs < 0) return "just now";
+  const seconds = Math.floor(diffMs / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }

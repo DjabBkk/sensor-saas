@@ -4,6 +4,7 @@ import { useEffect, useState, use } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { getDeviceStatus } from "@/lib/deviceStatus";
 import { EmbedBadge } from "@/components/embed/EmbedBadge";
 
 export default function EmbedBadgePage({
@@ -43,10 +44,22 @@ export default function EmbedBadgePage({
   return (
     <div className={theme === "dark" ? "dark" : ""}>
       <div className="flex min-h-screen items-center justify-center bg-background p-4 text-foreground">
-        <EmbedBadge
-          deviceName={data.device.name}
-          pm25={data.latestReading?.pm25}
-        />
+        {(() => {
+          const status = getDeviceStatus({
+            lastReadingAt: data.device.lastReadingAt,
+            lastBattery: data.device.lastBattery,
+            providerOffline: data.device.providerOffline,
+          });
+          const reading = status.isOnline ? data.latestReading : null;
+
+          return (
+            <EmbedBadge
+              deviceName={data.device.name}
+              isOnline={status.isOnline}
+              pm25={reading?.pm25}
+            />
+          );
+        })()}
       </div>
     </div>
   );

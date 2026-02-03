@@ -1,7 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useAuth, useUser } from "@clerk/nextjs";
+import { useMutation } from "convex/react";
 
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -14,14 +18,34 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Bell, Moon, Globe, Trash2 } from "lucide-react";
+import { Bell, Moon, Globe } from "lucide-react";
 
 export default function SettingsPage() {
+  const { isLoaded, userId } = useAuth();
+  const { user } = useUser();
+  const getOrCreateUser = useMutation(api.users.getOrCreateUser);
+  const [convexUserId, setConvexUserId] = useState<Id<"users"> | null>(null);
   const [emailAlerts, setEmailAlerts] = useState(true);
   const [pushNotifications, setPushNotifications] = useState(false);
   const [darkMode, setDarkMode] = useState(true);
   const [timezone, setTimezone] = useState("auto");
   const [units, setUnits] = useState("metric");
+
+  // Get or create Convex user
+  useEffect(() => {
+    if (!isLoaded || !userId || convexUserId || !user) return;
+
+    const email = user.primaryEmailAddress?.emailAddress;
+    if (!email) return;
+
+    getOrCreateUser({
+      authId: userId,
+      email,
+      name: user.fullName ?? undefined,
+    })
+      .then(setConvexUserId)
+      .catch(console.error);
+  }, [isLoaded, userId, user, convexUserId, getOrCreateUser]);
 
   return (
     <div className="space-y-6 p-8">
@@ -144,32 +168,6 @@ export default function SettingsPage() {
                 </SelectContent>
               </Select>
             </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Danger Zone */}
-      <Card className="border-destructive/50">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-destructive">
-            <Trash2 className="h-5 w-5" />
-            Danger Zone
-          </CardTitle>
-          <CardDescription>
-            Irreversible actions that affect your account
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <p className="font-medium">Delete all data</p>
-              <p className="text-sm text-muted-foreground">
-                Permanently delete all your device data and history
-              </p>
-            </div>
-            <Button variant="destructive" size="sm">
-              Delete Data
-            </Button>
           </div>
         </CardContent>
       </Card>

@@ -13,6 +13,8 @@ const deviceShape = v.object({
   model: v.optional(v.string()),
   timezone: v.optional(v.string()),
   lastReadingAt: v.optional(v.number()),
+  lastBattery: v.optional(v.number()),
+  providerOffline: v.optional(v.boolean()),
   createdAt: v.number(),
 });
 
@@ -93,9 +95,11 @@ export const getKioskConfig = query({
     v.null(),
     v.object({
       label: v.optional(v.string()),
+      title: v.optional(v.string()),
       mode: v.union(v.literal("single"), v.literal("multi")),
       theme: v.union(v.literal("dark"), v.literal("light")),
       refreshInterval: v.number(),
+      visibleMetrics: v.optional(v.array(v.string())),
       devices: v.array(
         v.object({
           device: deviceShape,
@@ -141,9 +145,11 @@ export const getKioskConfig = query({
 
     return {
       label: kiosk.label,
+      title: kiosk.title,
       mode: kiosk.mode,
       theme: kiosk.theme,
       refreshInterval: kiosk.refreshInterval,
+      visibleMetrics: kiosk.visibleMetrics,
       devices: devicesWithReadings,
     };
   },

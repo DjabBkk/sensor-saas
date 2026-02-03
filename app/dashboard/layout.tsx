@@ -9,6 +9,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Sidebar } from "./_components/Sidebar";
 import { AddDeviceDialog } from "./_components/AddDeviceDialog";
+import { AddDeviceDialogProvider } from "./_components/add-device-context";
 
 export default function DashboardLayout({
   children,
@@ -67,19 +68,21 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar
-        devices={devices ?? []}
-        rooms={rooms ?? []}
-        userId={convexUserId}
-        onAddDevice={() => setAddDeviceOpen(true)}
-      />
-      <main className="flex-1 overflow-auto">{children}</main>
-      <AddDeviceDialog
-        open={addDeviceOpen}
-        onOpenChange={setAddDeviceOpen}
-        userId={convexUserId}
-      />
-    </div>
+    <AddDeviceDialogProvider openDialog={() => setAddDeviceOpen(true)}>
+      <div className="flex min-h-screen">
+        <Sidebar
+          devices={devices ?? []}
+          rooms={rooms ?? []}
+          userId={convexUserId}
+          onAddDevice={() => setAddDeviceOpen(true)}
+        />
+        <main className="flex-1 overflow-auto">{children}</main>
+        <AddDeviceDialog
+          open={addDeviceOpen}
+          onOpenChange={setAddDeviceOpen}
+          userId={convexUserId}
+        />
+      </div>
+    </AddDeviceDialogProvider>
   );
 }

@@ -2,12 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { UserButton } from "@clerk/nextjs";
+import { useQuery } from "convex/react";
+import { useTheme } from "next-themes";
 
+import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { getDeviceStatus } from "@/lib/deviceStatus";
 import {
   Tooltip,
   TooltipContent,
@@ -16,7 +20,7 @@ import {
 } from "@/components/ui/tooltip";
 import {
   LayoutDashboard,
-  History,
+  Cpu,
   Settings,
   User,
   Plus,
@@ -25,6 +29,9 @@ import {
   WifiOff,
   Monitor,
   Code,
+  ChevronRight,
+  Sun,
+  Moon,
 } from "lucide-react";
 
 type Device = {
@@ -33,6 +40,8 @@ type Device = {
   model?: string;
   roomId?: Id<"rooms">;
   lastReadingAt?: number;
+  lastBattery?: number;
+  providerOffline?: boolean;
 };
 
 type Room = {
@@ -49,7 +58,7 @@ type SidebarProps = {
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/dashboard/history", label: "History", icon: History },
+  { href: "/dashboard/devices", label: "Devices", icon: Cpu },
   { href: "/dashboard/kiosk", label: "Kiosk", icon: Monitor },
   { href: "/dashboard/widgets", label: "Widgets", icon: Code },
 ];
@@ -169,41 +178,13 @@ export function Sidebar({ devices, rooms, userId, onAddDevice }: SidebarProps) {
                       {roomName}
                     </span>
                     <div className="space-y-0.5">
-                      {roomDevices.map((device) => {
-                        const isOnline =
-                          device.lastReadingAt &&
-                          Date.now() - device.lastReadingAt < 30 * 60 * 1000;
-                        const active = isDeviceActive(device._id);
-
-                        return (
-                          <Tooltip key={device._id}>
-                            <TooltipTrigger asChild>
-                              <Link href={`/dashboard/device/${device._id}`}>
-                                <Button
-                                  variant={active ? "secondary" : "ghost"}
-                                  size="sm"
-                                  className="w-full justify-start gap-2 text-left"
-                                >
-                                  {isOnline ? (
-                                    <Wifi className="h-3 w-3 text-emerald-500" />
-                                  ) : (
-                                    <WifiOff className="h-3 w-3 text-muted-foreground" />
-                                  )}
-                                  <span className="flex-1 truncate text-xs">
-                                    {device.name}
-                                  </span>
-                                </Button>
-                              </Link>
-                            </TooltipTrigger>
-                            <TooltipContent side="right">
-                              <p>{device.model ?? "Qingping device"}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {isOnline ? "Online" : "Offline"}
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        );
-                      })}
+                      {roomDevices.map((device) => (
+                        <DeviceSidebarItem
+                          key={device._id}
+                          device={device}
+                          isActive={isDeviceActive(device._id)}
+                        />
+                      ))}
                     </div>
                   </div>
                 );
@@ -222,6 +203,11 @@ export function Sidebar({ devices, rooms, userId, onAddDevice }: SidebarProps) {
             Add Device
           </Button>
         </div>
+
+        <Separator />
+
+        {/* Theme Toggle */}
+        <ThemeToggle />
 
         <Separator />
 
@@ -244,26 +230,79 @@ export function Sidebar({ devices, rooms, userId, onAddDevice }: SidebarProps) {
             );
           })}
         </nav>
-
-        <Separator />
-
-        {/* User Profile */}
-        <div className="flex items-center gap-3 p-4">
-          <UserButton
-            afterSignOutUrl="/"
-            appearance={{
-              elements: {
-                avatarBox: "h-8 w-8",
-              },
-            }}
-          />
-          <div className="flex-1 truncate">
-            <p className="truncate text-sm font-medium text-foreground">
-              My Account
-            </p>
-          </div>
-        </div>
       </aside>
     </TooltipProvider>
+  );
+}
+
+// Theme Toggle Component
+function ThemeToggle() {
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
+
+  return (
+    <div className="flex items-center justify-between px-4 py-3">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        {isDark ? (
+          <Moon className="h-4 w-4" />
+        ) : (
+          <Sun className="h-4 w-4" />
+        )}
+        <span>{isDark ? "Dark" : "Light"} Mode</span>
+      </div>
+      <Switch
+        checked={isDark}
+        onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
+        aria-label="Toggle theme"
+      />
+    </div>
+  );
+}
+
+// Separate component to use hooks inside map
+function DeviceSidebarItem({
+  device,
+  isActive,
+}: {
+  device: Device;
+  isActive: boolean;
+}) {
+  // Query latest reading to get most accurate status
+  const reading = useQuery(api.readings.latest, {
+    deviceId: device._id,
+  });
+  const lastReadingAt = reading?.ts ?? device.lastReadingAt;
+  const status = getDeviceStatus({
+    lastReadingAt,
+    lastBattery: device.lastBattery,
+    providerOffline: device.providerOffline,
+  });
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Link href={`/dashboard/device/${device._id}`}>
+          <Button
+            variant={isActive ? "secondary" : "ghost"}
+            size="sm"
+            className="group w-full justify-start gap-2 text-left"
+          >
+            {status.isOnline ? (
+              <Wifi className="h-3 w-3 text-emerald-500" />
+            ) : (
+              <WifiOff className="h-3 w-3 text-muted-foreground" />
+            )}
+            <span className="flex-1 truncate text-xs">{device.name}</span>
+            <ChevronRight className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+          </Button>
+        </Link>
+      </TooltipTrigger>
+      <TooltipContent side="right">
+        <p>{device.model ?? "Qingping device"}</p>
+        <p className="text-xs text-muted-foreground">
+          {status.isOnline ? "Online" : "Offline"}
+        </p>
+      </TooltipContent>
+    </Tooltip>
   );
 }

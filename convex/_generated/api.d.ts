@@ -32,6 +32,21 @@ export declare const api: {
       },
       Id<"devices">
     >;
+    deleteDevice: FunctionReference<
+      "mutation",
+      "public",
+      { deviceId: Id<"devices"> },
+      null
+    >;
+    forceClaimDevice: FunctionReference<
+      "mutation",
+      "public",
+      {
+        macAddress: string;
+        provider: "qingping" | "purpleair" | "iqair" | "temtop";
+      },
+      null
+    >;
     get: FunctionReference<
       "query",
       "public",
@@ -40,15 +55,24 @@ export declare const api: {
         _creationTime: number;
         _id: Id<"devices">;
         createdAt: number;
+        hiddenMetrics?: Array<string>;
+        lastBattery?: number;
         lastReadingAt?: number;
         model?: string;
         name: string;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         providerDeviceId: string;
+        providerOffline?: boolean;
         roomId?: Id<"rooms">;
         timezone?: string;
         userId: Id<"users">;
       }
+    >;
+    hasQingpingDevice: FunctionReference<
+      "query",
+      "public",
+      { userId: Id<"users"> },
+      boolean
     >;
     list: FunctionReference<
       "query",
@@ -58,11 +82,14 @@ export declare const api: {
         _creationTime: number;
         _id: Id<"devices">;
         createdAt: number;
+        hiddenMetrics?: Array<string>;
+        lastBattery?: number;
         lastReadingAt?: number;
         model?: string;
         name: string;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         providerDeviceId: string;
+        providerOffline?: boolean;
         roomId?: Id<"rooms">;
         timezone?: string;
         userId: Id<"users">;
@@ -72,6 +99,12 @@ export declare const api: {
       "mutation",
       "public",
       { deviceId: Id<"devices">; name: string },
+      null
+    >;
+    updateHiddenMetrics: FunctionReference<
+      "mutation",
+      "public",
+      { deviceId: Id<"devices">; hiddenMetrics: Array<string> },
       null
     >;
     updateRoom: FunctionReference<
@@ -144,7 +177,9 @@ export declare const api: {
         mode: "single" | "multi";
         refreshInterval: number;
         theme: "dark" | "light";
+        title?: string;
         userId: Id<"users">;
+        visibleMetrics?: Array<string>;
       },
       {
         _creationTime: number;
@@ -156,8 +191,10 @@ export declare const api: {
         mode: "single" | "multi";
         refreshInterval: number;
         theme: "dark" | "light";
+        title?: string;
         token: string;
         userId: Id<"users">;
+        visibleMetrics?: Array<string>;
       }
     >;
     listForUser: FunctionReference<
@@ -174,8 +211,10 @@ export declare const api: {
         mode: "single" | "multi";
         refreshInterval: number;
         theme: "dark" | "light";
+        title?: string;
         token: string;
         userId: Id<"users">;
+        visibleMetrics?: Array<string>;
       }>
     >;
     revoke: FunctionReference<
@@ -194,6 +233,8 @@ export declare const api: {
         mode: "single" | "multi";
         refreshInterval: number;
         theme: "dark" | "light";
+        title?: string;
+        visibleMetrics?: Array<string>;
       },
       null
     >;
@@ -211,6 +252,26 @@ export declare const api: {
       },
       null
     >;
+    hasProviderCredentials: FunctionReference<
+      "query",
+      "public",
+      {
+        provider: "qingping" | "purpleair" | "iqair" | "temtop";
+        userId: Id<"users">;
+      },
+      boolean
+    >;
+  };
+  providersActions: {
+    syncDevicesForUserPublic: FunctionReference<
+      "action",
+      "public",
+      {
+        provider: "qingping" | "purpleair" | "iqair" | "temtop";
+        userId: Id<"users">;
+      },
+      null
+    >;
   };
   public: {
     getEmbedDevice: FunctionReference<
@@ -222,11 +283,13 @@ export declare const api: {
           _creationTime: number;
           _id: Id<"devices">;
           createdAt: number;
+          lastBattery?: number;
           lastReadingAt?: number;
           model?: string;
           name: string;
           provider: "qingping" | "purpleair" | "iqair" | "temtop";
           providerDeviceId: string;
+          providerOffline?: boolean;
           roomId?: Id<"rooms">;
           timezone?: string;
           userId: Id<"users">;
@@ -273,11 +336,13 @@ export declare const api: {
             _creationTime: number;
             _id: Id<"devices">;
             createdAt: number;
+            lastBattery?: number;
             lastReadingAt?: number;
             model?: string;
             name: string;
             provider: "qingping" | "purpleair" | "iqair" | "temtop";
             providerDeviceId: string;
+            providerOffline?: boolean;
             roomId?: Id<"rooms">;
             timezone?: string;
             userId: Id<"users">;
@@ -302,6 +367,8 @@ export declare const api: {
         mode: "single" | "multi";
         refreshInterval: number;
         theme: "dark" | "light";
+        title?: string;
+        visibleMetrics?: Array<string>;
       }
     >;
   };
@@ -397,11 +464,25 @@ export declare const api: {
     >;
   };
   users: {
+    deleteUser: FunctionReference<
+      "mutation",
+      "public",
+      { userId: Id<"users"> },
+      {
+        devicesDeleted: number;
+        embedTokensDeleted: number;
+        kioskConfigsDeleted: number;
+        providerConfigsDeleted: number;
+        readingsDeleted: number;
+        roomsDeleted: number;
+        userDeleted: boolean;
+      }
+    >;
     getCurrentUser: FunctionReference<
       "query",
       "public",
       { authId: string },
-      {
+      null | {
         _creationTime: number;
         _id: Id<"users">;
         authId: string;
@@ -409,7 +490,7 @@ export declare const api: {
         email: string;
         name?: string;
         plan: "free" | "basic" | "pro" | "team";
-      } | null
+      }
     >;
     getOrCreateUser: FunctionReference<
       "mutation",
@@ -439,6 +520,16 @@ export declare const internal: {
       },
       null | { _id: Id<"devices">; userId: Id<"users"> }
     >;
+    isDeletedForUser: FunctionReference<
+      "query",
+      "internal",
+      {
+        provider: "qingping" | "purpleair" | "iqair" | "temtop";
+        providerDeviceId: string;
+        userId: Id<"users">;
+      },
+      boolean
+    >;
     upsertFromProvider: FunctionReference<
       "mutation",
       "internal",
@@ -447,6 +538,7 @@ export declare const internal: {
         name: string;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         providerDeviceId: string;
+        providerOffline?: boolean;
         timezone?: string;
         userId: Id<"users">;
       },
@@ -485,8 +577,10 @@ export declare const internal: {
         mode: "single" | "multi";
         refreshInterval: number;
         theme: "dark" | "light";
+        title?: string;
         token: string;
         userId: Id<"users">;
+        visibleMetrics?: Array<string>;
       }
     >;
   };
@@ -621,6 +715,21 @@ export declare const internal: {
         voc?: number;
       },
       Id<"readings">
+    >;
+  };
+  users: {
+    mergeDuplicateUsers: FunctionReference<
+      "mutation",
+      "internal",
+      { email: string; keepUserId: Id<"users"> },
+      {
+        devicesTransferred: number;
+        embedTokensTransferred: number;
+        kioskConfigsTransferred: number;
+        providerConfigsTransferred: number;
+        roomsTransferred: number;
+        usersDeleted: number;
+      }
     >;
   };
 };
