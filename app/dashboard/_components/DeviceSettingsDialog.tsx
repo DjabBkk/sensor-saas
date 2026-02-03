@@ -61,7 +61,6 @@ export function DeviceSettingsDialog({
   const [renameError, setRenameError] = useState<string | null>(null);
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -254,25 +253,15 @@ export function DeviceSettingsDialog({
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
-                <strong>Warning:</strong> This will delete the monitor and all readings.
+                <strong>Warning:</strong> This action will permanently delete everything associated with this monitor:
+                <ul className="mt-2 ml-4 list-disc space-y-1">
+                  <li>The monitor itself</li>
+                  <li>All historical readings and data</li>
+                  <li>All embed tokens and configurations</li>
+                </ul>
+                This action cannot be undone.
               </AlertDescription>
             </Alert>
-
-            <div className="space-y-2">
-              <Label htmlFor="delete-confirm">
-                Type <strong>{deviceName}</strong> to confirm:
-              </Label>
-              <Input
-                id="delete-confirm"
-                value={deleteConfirmText}
-                onChange={(e) => {
-                  setDeleteConfirmText(e.target.value);
-                  setDeleteError(null);
-                }}
-                placeholder={deviceName}
-                disabled={isDeleting}
-              />
-            </div>
 
             {deleteError && (
               <Alert variant="destructive">
@@ -287,7 +276,6 @@ export function DeviceSettingsDialog({
               variant="outline"
               onClick={() => {
                 setShowDeleteDialog(false);
-                setDeleteConfirmText("");
                 setDeleteError(null);
               }}
               disabled={isDeleting}
@@ -297,7 +285,7 @@ export function DeviceSettingsDialog({
             <Button
               variant="destructive"
               onClick={handleDelete}
-              disabled={isDeleting || deleteConfirmText !== deviceName}
+              disabled={isDeleting}
             >
               {isDeleting ? (
                 <>
