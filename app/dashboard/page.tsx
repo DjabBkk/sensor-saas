@@ -269,7 +269,7 @@ function DeviceOverviewCard({
   }, [reading]);
 
   const defaultDashboardMetrics = useMemo(
-    () => availableMetrics.map((metric) => metric.key).slice(0, 4),
+    () => availableMetrics.map((metric) => metric.key).slice(0, 3),
     [availableMetrics]
   );
 
@@ -295,13 +295,13 @@ function DeviceOverviewCard({
   const selectedMetrics = dashboardSelection
     .filter((key) => availableMetricKeys.includes(key))
     .filter((key) => key in metricConfig)
-    .slice(0, 4);
+    .slice(0, 3);
 
   const handleToggleDashboardMetric = (metricKey: string) => {
     setDashboardError(null);
     const isSelected = dashboardSelection.includes(metricKey);
-    if (!isSelected && dashboardSelection.length >= 4) {
-      setDashboardError("You can show up to 4 metrics.");
+    if (!isSelected && dashboardSelection.length >= 3) {
+      setDashboardError("You can show up to 3 metrics.");
       return;
     }
     if (isSelected && dashboardSelection.length <= 1) {
@@ -314,8 +314,8 @@ function DeviceOverviewCard({
   };
 
   const handleSaveDashboardMetrics = async () => {
-    if (dashboardSelection.length === 0 || dashboardSelection.length > 4) {
-      setDashboardError("Select 1 to 4 metrics.");
+    if (dashboardSelection.length === 0 || dashboardSelection.length > 3) {
+      setDashboardError("Select 1 to 3 metrics.");
       return;
     }
     setIsSavingDashboard(true);
@@ -405,25 +405,32 @@ function DeviceOverviewCard({
           <DialogHeader>
             <DialogTitle>Display Metrics</DialogTitle>
             <DialogDescription>
-              Choose up to 4 metrics for this dashboard card.
+              Choose up to 3 metrics for this dashboard card.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-2">
-              {availableMetrics.map((metric) => (
-                <div
-                  key={`dashboard-${metric.key}`}
-                  className="flex items-center justify-between rounded-lg border px-3 py-2"
-                >
-                  <span className="text-sm">{metric.label}</span>
-                  <Switch
-                    checked={dashboardSelection.includes(metric.key)}
-                    onCheckedChange={() =>
-                      handleToggleDashboardMetric(metric.key)
-                    }
-                  />
-                </div>
-              ))}
+              {availableMetrics.map((metric) => {
+                const isSelected = dashboardSelection.includes(metric.key);
+                const isDisabled = !isSelected && dashboardSelection.length >= 3;
+                return (
+                  <div
+                    key={`dashboard-${metric.key}`}
+                    className={`flex items-center justify-between rounded-lg border px-3 py-2 ${
+                      isDisabled ? "opacity-50" : ""
+                    }`}
+                  >
+                    <span className="text-sm">{metric.label}</span>
+                    <Switch
+                      checked={isSelected}
+                      disabled={isDisabled}
+                      onCheckedChange={() =>
+                        handleToggleDashboardMetric(metric.key)
+                      }
+                    />
+                  </div>
+                );
+              })}
               {availableMetrics.length === 0 && (
                 <p className="text-sm text-muted-foreground">
                   No metrics available yet.
