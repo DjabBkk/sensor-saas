@@ -42,7 +42,6 @@ export default function DashboardPage() {
   const [convexUserId, setConvexUserId] = useState<Id<"users"> | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
-  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -83,20 +82,10 @@ export default function DashboardPage() {
 
     try {
       await syncDevices({ userId: convexUserId, provider: "qingping" });
-      setLastSyncedAt(Date.now());
-      setSyncMessage("Sync completed. Updating device status...");
-      // Clear success message after 3 seconds
+      setSyncMessage("Sync completed!");
       setTimeout(() => setSyncMessage(null), 3000);
     } catch (error: any) {
-      // Check if it's a "function not found" error (Convex dev still syncing)
-      const errorMessage = error?.message || String(error);
-      if (errorMessage.includes("Could not find public function") || 
-          errorMessage.includes("Did you forget to run")) {
-        setSyncMessage("Sync function not ready yet. Please wait a moment and try again.");
-      } else {
-        setSyncMessage("Sync failed. Please check your provider connection.");
-      }
-      // Don't log to console in production - only in dev
+      setSyncMessage("Sync failed. Check console for details.");
       if (process.env.NODE_ENV === "development") {
         console.error("Sync error:", error);
       }
@@ -120,18 +109,9 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex flex-col items-start gap-2 sm:items-end">
-          <Button
-            variant="outline"
-            onClick={handleSyncNow}
-            disabled={syncing}
-          >
+          <Button variant="outline" onClick={handleSyncNow} disabled={syncing}>
             {syncing ? "Syncing..." : "Sync now"}
           </Button>
-          {lastSyncedAt && (
-            <span className="text-xs text-muted-foreground">
-              Last synced: {formatRelativeTime(lastSyncedAt)}
-            </span>
-          )}
           {syncMessage && (
             <span className="text-xs text-muted-foreground">{syncMessage}</span>
           )}
@@ -455,15 +435,3 @@ function DeviceOverviewCard({
   );
 }
 
-function formatRelativeTime(timestampMs: number) {
-  const diffMs = Date.now() - timestampMs;
-  if (diffMs < 0) return "just now";
-  const seconds = Math.floor(diffMs / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}

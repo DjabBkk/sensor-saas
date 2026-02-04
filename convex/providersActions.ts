@@ -5,7 +5,7 @@ import { v } from "convex/values";
 
 import { providerValidator } from "./lib/validators";
 import { internal } from "./_generated/api";
-import { getAccessToken, listDevices } from "./providers/qingping/client";
+import { getAccessToken, listDevices, updateDeviceSettings } from "./providers/qingping/client";
 import { mapQingpingDevice, mapQingpingReading } from "./providers/qingping/mappers";
 
 export const fetchAccessToken = internalAction({
@@ -32,12 +32,16 @@ export const connectAndSync = internalAction({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    console.log(`[CONNECT] Starting connection for user ${args.userId}, provider: ${args.provider}`);
+    
     if (args.provider !== "qingping") {
       throw new Error("Only Qingping is supported for now.");
     }
 
     // Get access token
+    console.log(`[CONNECT] Fetching OAuth token...`);
     const tokenResult = await getAccessToken(args.appKey, args.appSecret);
+    console.log(`[CONNECT] Got OAuth token, expires at: ${new Date(tokenResult.tokenExpiresAt).toISOString()}`);
 
     // Get existing config
     const existing = await ctx.runQuery(internal.providers.getConfig, {
@@ -47,6 +51,7 @@ export const connectAndSync = internalAction({
 
     // Update or insert config
     if (existing) {
+      console.log(`[CONNECT] Updating existing config for user ${args.userId}`);
       await ctx.runMutation(internal.providers.updateConfig, {
         configId: existing._id,
         accessToken: tokenResult.accessToken,
@@ -56,6 +61,7 @@ export const connectAndSync = internalAction({
         webhookSecret: args.webhookSecret,
       });
     } else {
+      console.log(`[CONNECT] Creating new config for user ${args.userId}`);
       await ctx.runMutation(internal.providers.insertConfig, {
         userId: args.userId,
         provider: args.provider,
@@ -68,10 +74,12 @@ export const connectAndSync = internalAction({
     }
 
     // Sync devices
+    console.log(`[CONNECT] Credentials saved, starting device sync for user ${args.userId}`);
     await ctx.runAction(internal.providersActions.syncDevicesForUser, {
       userId: args.userId,
       provider: args.provider,
     });
+    console.log(`[CONNECT] Connection and sync complete for user ${args.userId}`);
 
     return null;
   },
@@ -288,6 +296,122 @@ export const refreshExpiringTokens = internalAction({
     }
 
     return null;
+  },
+});
+
+/**
+ * Update device report interval (webhook frequency).
+ * Minimum is 60 seconds (1 minute), default is 3600 seconds (1 hour).
+ * Common values: 600 (10 min), 1800 (30 min), 3600 (1 hour)
+ */
+export const updateDeviceReportInterval = action({
+  args: {
+    userId: v.id("users"),
+    deviceId: v.id("devices"),
+    reportIntervalSeconds: v.number(),
+  },
+  returns: v.object({
+    success: v.boolean(),
+    message: v.string(),
+  }),
+  handler: async (ctx, args) => {
+    // Validate report interval (minimum 60 seconds as per Qingping docs)
+    if (args.reportIntervalSeconds < 60) {
+      return {
+        success: false,
+        message: "Report interval must be at least 60 seconds (1 minute)",
+      };
+    }
+
+    // Get device info
+    const device = await ctx.runQuery(internal.devices.getInternal, {
+      deviceId: args.deviceId,
+    });
+
+    if (!device) {
+      return {
+        success: false,
+        message: "Device not found",
+      };
+    }
+
+    if (device.userId !== args.userId) {
+      return {
+        success: false,
+        message: "Device does not belong to this user",
+      };
+    }
+
+    if (device.provider !== "qingping") {
+      return {
+        success: false,
+        message: "Report interval can only be changed for Qingping devices",
+      };
+    }
+
+    // Get provider config for access token
+    const config = await ctx.runQuery(internal.providers.getConfig, {
+      userId: args.userId,
+      provider: "qingping",
+    });
+
+    if (!config?.accessToken) {
+      return {
+        success: false,
+        message: "No Qingping credentials found. Please connect your Qingping account first.",
+      };
+    }
+
+    // Check if token needs refresh
+    let accessToken = config.accessToken;
+    const now = Date.now();
+    if (!config.tokenExpiresAt || config.tokenExpiresAt <= now + 5 * 60 * 1000) {
+      if (!config.appKey || !config.appSecret || !config._id) {
+        return {
+          success: false,
+          message: "Token expired and cannot be refreshed",
+        };
+      }
+      
+      const tokenResult = await getAccessToken(config.appKey, config.appSecret);
+      accessToken = tokenResult.accessToken;
+      
+      await ctx.runMutation(internal.providers.updateToken, {
+        providerConfigId: config._id,
+        accessToken: tokenResult.accessToken,
+        tokenExpiresAt: tokenResult.tokenExpiresAt,
+      });
+    }
+
+    // Call Qingping API to update device settings
+    // Note: collect_interval should be <= report_interval and report_interval should be an integer multiple of collect_interval
+    // We use 60 seconds (1 minute) as collect_interval, which divides evenly into all our report intervals
+    const collectInterval = 60; // 1 minute - divides evenly into 1, 5, 10, 30, 60 minutes
+    
+    try {
+      await updateDeviceSettings(accessToken, {
+        mac: [device.providerDeviceId], // API expects array of MAC addresses
+        report_interval: args.reportIntervalSeconds,
+        collect_interval: collectInterval,
+        timestamp: Date.now(), // Millisecond timestamp as required by API
+      });
+
+      const minutes = Math.round(args.reportIntervalSeconds / 60);
+      console.log(
+        `[UPDATE SETTINGS] Updated report interval for device ${device.providerDeviceId} to ${args.reportIntervalSeconds}s (${minutes} min)`
+      );
+
+      return {
+        success: true,
+        message: `Report interval updated to ${minutes} minute${minutes === 1 ? "" : "s"}`,
+      };
+    } catch (error) {
+      console.error("[UPDATE SETTINGS] Failed to update device settings:", error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : "Failed to update device settings",
+      };
+    }
   },
 });
 

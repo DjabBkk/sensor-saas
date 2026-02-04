@@ -62,7 +62,6 @@ export function ConnectDeviceDialog({
   const [stepIndex, setStepIndex] = useState(0);
   const [appKey, setAppKey] = useState("");
   const [appSecret, setAppSecret] = useState("");
-  const [deviceName, setDeviceName] = useState("");
   const [macAddress, setMacAddress] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -91,7 +90,6 @@ export function ConnectDeviceDialog({
       setStepIndex(0);
       setAppKey("");
       setAppSecret("");
-      setDeviceName("");
       setMacAddress("");
       setError(null);
       setIsSubmitting(false);
@@ -148,10 +146,6 @@ export function ConnectDeviceDialog({
     event.preventDefault();
     setError(null);
 
-    if (!deviceName.trim()) {
-      setError("Enter a device name.");
-      return;
-    }
     if (!macAddress.trim()) {
       setError("Enter a MAC address.");
       return;
@@ -176,7 +170,6 @@ export function ConnectDeviceDialog({
 
       await addDevice({
         userId,
-        name: deviceName.trim(),
         macAddress: normalizedMac,
         provider: "qingping",
       });
@@ -333,15 +326,10 @@ export function ConnectDeviceDialog({
 
             {currentStep === "device" && (
               <form onSubmit={handleSubmitDevice} className="grid gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="deviceName">Device name</Label>
-                  <Input
-                    id="deviceName"
-                    value={deviceName}
-                    onChange={(e) => setDeviceName(e.target.value)}
-                    placeholder="Bedroom Monitor"
-                  />
-                </div>
+                <p className="text-sm text-muted-foreground">
+                  Enter the MAC address of your device. You can find it in the Qingping+ app under device settings.
+                  The device name will be synced from your Qingping+ app.
+                </p>
                 <div className="grid gap-2">
                   <Label htmlFor="macAddress">MAC address</Label>
                   <Input

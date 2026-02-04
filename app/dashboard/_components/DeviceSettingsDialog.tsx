@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useMutation } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 
 import { api } from "@/convex/_generated/api";
@@ -20,6 +20,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { AlertTriangle, Loader2, Trash2 } from "lucide-react";
 
 type DeviceSettingsDialogProps = {
@@ -51,6 +58,10 @@ export function DeviceSettingsDialog({
   const updateHiddenMetrics = useMutation(api.devices.updateHiddenMetrics);
   const renameDevice = useMutation(api.devices.rename);
   const deleteDevice = useMutation(api.devices.deleteDevice);
+  const updateReportInterval = useAction(api.providersActions.updateDeviceReportInterval);
+  
+  // Get device info to check provider and get userId
+  const device = useQuery(api.devices.get, { deviceId });
 
   const [open, setOpen] = useState(false);
   const [renameValue, setRenameValue] = useState(deviceName);
@@ -66,6 +77,20 @@ export function DeviceSettingsDialog({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Report interval state
+  const [reportIntervalMinutes, setReportIntervalMinutes] = useState<string>("60");
+  const [isUpdatingInterval, setIsUpdatingInterval] = useState(false);
+  const [intervalError, setIntervalError] = useState<string | null>(null);
+  const [intervalSuccess, setIntervalSuccess] = useState<string | null>(null);
+
+  const REPORT_INTERVAL_OPTIONS = [
+    { value: "1", label: "1 minute", seconds: 60 },
+    { value: "5", label: "5 minutes", seconds: 300 },
+    { value: "10", label: "10 minutes", seconds: 600 },
+    { value: "30", label: "30 minutes", seconds: 1800 },
+    { value: "60", label: "1 hour", seconds: 3600 },
+  ];
 
   const availableMetricSet = useMemo(
     () => new Set(availableMetrics ?? METRIC_OPTIONS.map((metric) => metric.key)),
@@ -92,12 +117,59 @@ export function DeviceSettingsDialog({
       setHiddenMetricKeys(hiddenMetrics ?? []);
       setMetricsError(null);
       setRenameError(null);
+      setIntervalError(null);
+      setIntervalSuccess(null);
     }
   }, [
     deviceName,
     hiddenMetrics,
     open,
   ]);
+
+  const handleUpdateReportInterval = async () => {
+    if (!device) {
+      setIntervalError("Device information not available");
+      return;
+    }
+
+    if (device.provider !== "qingping") {
+      setIntervalError("Report interval can only be changed for Qingping devices");
+      return;
+    }
+
+    const selectedOption = REPORT_INTERVAL_OPTIONS.find(
+      (opt) => opt.value === reportIntervalMinutes
+    );
+    if (!selectedOption) {
+      setIntervalError("Invalid interval selected");
+      return;
+    }
+
+    setIsUpdatingInterval(true);
+    setIntervalError(null);
+    setIntervalSuccess(null);
+
+    try {
+      const result = await updateReportInterval({
+        userId: device.userId,
+        deviceId,
+        reportIntervalSeconds: selectedOption.seconds,
+      });
+
+      if (result.success) {
+        setIntervalSuccess(result.message);
+        setTimeout(() => setIntervalSuccess(null), 5000);
+      } else {
+        setIntervalError(result.message);
+      }
+    } catch (err) {
+      setIntervalError(
+        err instanceof Error ? err.message : "Failed to update report interval"
+      );
+    } finally {
+      setIsUpdatingInterval(false);
+    }
+  };
 
   const handleToggleMetric = async (metricKey: string) => {
     setMetricsError(null);
@@ -241,6 +313,57 @@ export function DeviceSettingsDialog({
                 )}
               </Button>
             </div>
+
+            {device?.provider === "qingping" && (
+              <div className="space-y-3">
+                <div>
+                  <h4 className="text-sm font-medium">Data Report Frequency</h4>
+                  <p className="text-xs text-muted-foreground">
+                    Control how often the device sends data via webhook. Shorter intervals provide more real-time data but use more battery.
+                  </p>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="report-interval">Report Interval</Label>
+                  <Select
+                    value={reportIntervalMinutes}
+                    onValueChange={setReportIntervalMinutes}
+                    disabled={isUpdatingInterval}
+                  >
+                    <SelectTrigger id="report-interval">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {REPORT_INTERVAL_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {intervalError && (
+                    <p className="text-sm text-destructive">{intervalError}</p>
+                  )}
+                  {intervalSuccess && (
+                    <p className="text-sm text-emerald-600 dark:text-emerald-400">
+                      {intervalSuccess}
+                    </p>
+                  )}
+                </div>
+                <Button
+                  onClick={handleUpdateReportInterval}
+                  disabled={isUpdatingInterval || !device}
+                >
+                  {isUpdatingInterval ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    "Update Report Interval"
+                  )}
+                </Button>
+              </div>
+            )}
 
             <div className="space-y-3 rounded-lg border border-destructive/50 p-4">
               <div className="flex items-center gap-2 text-destructive">

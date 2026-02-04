@@ -2,6 +2,7 @@ import { internalMutation, internalQuery, query, mutation } from "./_generated/s
 import { v } from "convex/values";
 
 import { providerValidator } from "./lib/validators";
+import { internal } from "./_generated/api";
 
 const deviceShape = v.object({
   _id: v.id("devices"),
@@ -118,13 +119,22 @@ export const deleteDevice = mutation({
   args: {
     deviceId: v.id("devices"),
   },
-  returns: v.null(),
+  returns: v.object({
+    readingsDeleted: v.number(),
+    embedTokensDeleted: v.number(),
+    kioskConfigsUpdated: v.number(),
+  }),
   handler: async (ctx, args) => {
     const device = await ctx.db.get(args.deviceId);
     if (!device) {
       throw new Error("Device not found");
     }
 
+    let readingsDeleted = 0;
+    let embedTokensDeleted = 0;
+    let kioskConfigsUpdated = 0;
+
+    // Mark device as deleted first (before deleting readings)
     const existingDeleted = await ctx.db
       .query("deletedDevices")
       .withIndex("by_userId_and_provider_and_providerDeviceId", (q) =>
@@ -144,39 +154,79 @@ export const deleteDevice = mutation({
       });
     }
 
-    const readings = await ctx.db
-      .query("readings")
-      .withIndex("by_deviceId", (q) => q.eq("deviceId", args.deviceId))
-      .collect();
+    // Delete all readings for this device
+    try {
+      const readings = await ctx.db
+        .query("readings")
+        .withIndex("by_deviceId", (q) => q.eq("deviceId", args.deviceId))
+        .collect();
 
-    for (const reading of readings) {
-      await ctx.db.delete(reading._id);
-    }
-
-    const embedTokens = await ctx.db
-      .query("embedTokens")
-      .withIndex("by_deviceId", (q) => q.eq("deviceId", args.deviceId))
-      .collect();
-
-    for (const token of embedTokens) {
-      await ctx.db.delete(token._id);
-    }
-
-    const kioskConfigs = await ctx.db
-      .query("kioskConfigs")
-      .withIndex("by_userId", (q) => q.eq("userId", device.userId))
-      .collect();
-
-    for (const config of kioskConfigs) {
-      if (!config.deviceIds.includes(args.deviceId)) {
-        continue;
+      for (const reading of readings) {
+        await ctx.db.delete(reading._id);
+        readingsDeleted++;
       }
-      const nextDeviceIds = config.deviceIds.filter((id) => id !== args.deviceId);
-      await ctx.db.patch(config._id, { deviceIds: nextDeviceIds });
+    } catch (error) {
+      console.error(`[DELETE DEVICE] Error deleting readings for device ${args.deviceId}:`, error);
+      // Continue with other cleanup even if readings deletion fails
     }
 
+    // Delete all embed tokens for this device
+    try {
+      const embedTokens = await ctx.db
+        .query("embedTokens")
+        .withIndex("by_deviceId", (q) => q.eq("deviceId", args.deviceId))
+        .collect();
+
+      for (const token of embedTokens) {
+        await ctx.db.delete(token._id);
+        embedTokensDeleted++;
+      }
+    } catch (error) {
+      console.error(`[DELETE DEVICE] Error deleting embed tokens for device ${args.deviceId}:`, error);
+      // Continue with other cleanup even if embed tokens deletion fails
+    }
+
+    // Update kiosk configs to remove this device
+    try {
+      const kioskConfigs = await ctx.db
+        .query("kioskConfigs")
+        .withIndex("by_userId", (q) => q.eq("userId", device.userId))
+        .collect();
+
+      for (const config of kioskConfigs) {
+        if (config.deviceIds.includes(args.deviceId)) {
+          const nextDeviceIds = config.deviceIds.filter((id) => id !== args.deviceId);
+          await ctx.db.patch(config._id, { deviceIds: nextDeviceIds });
+          kioskConfigsUpdated++;
+        }
+      }
+    } catch (error) {
+      console.error(`[DELETE DEVICE] Error updating kiosk configs for device ${args.deviceId}:`, error);
+      // Continue with device deletion even if kiosk config update fails
+    }
+
+    // Finally, delete the device itself
     await ctx.db.delete(args.deviceId);
-    return null;
+
+    console.log(
+      `[DELETE DEVICE] Deleted device ${args.deviceId}: ${readingsDeleted} readings, ${embedTokensDeleted} embed tokens, ${kioskConfigsUpdated} kiosk configs updated`
+    );
+
+    return {
+      readingsDeleted,
+      embedTokensDeleted,
+      kioskConfigsUpdated,
+    };
+  },
+});
+
+export const getInternal = internalQuery({
+  args: {
+    deviceId: v.id("devices"),
+  },
+  returns: v.union(v.null(), deviceShape),
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.deviceId);
   },
 });
 
@@ -228,6 +278,7 @@ export const upsertFromProvider = internalMutation({
       .unique();
 
     if (existing) {
+      // Update device info from provider (name, model, timezone, offline status)
       const patch: {
         name: string;
         model?: string;
@@ -267,7 +318,7 @@ export const upsertFromProvider = internalMutation({
 export const addByMac = mutation({
   args: {
     userId: v.id("users"),
-    name: v.string(),
+    name: v.optional(v.string()),
     macAddress: v.string(),
     provider: providerValidator,
   },
@@ -296,9 +347,8 @@ export const addByMac = mutation({
       .unique();
 
     if (existing) {
-      // If it exists and belongs to this user, just update the name
+      // If it exists and belongs to this user, return the existing device
       if (existing.userId === args.userId) {
-        await ctx.db.patch(existing._id, { name: args.name });
         return existing._id;
       }
       
@@ -313,7 +363,6 @@ export const addByMac = mutation({
           // Same person - transfer device ownership to new user
           await ctx.db.patch(existing._id, { 
             userId: args.userId,
-            name: args.name,
           });
           return existing._id;
         }
@@ -340,14 +389,46 @@ export const addByMac = mutation({
       await ctx.db.delete(existing._id);
     }
 
+    // Use provided name or a placeholder (will be updated by sync with Qingping name)
+    const deviceName = args.name || `Device ${args.macAddress.slice(-4)}`;
+
     // Create new device
-    return await ctx.db.insert("devices", {
+    const deviceId = await ctx.db.insert("devices", {
       userId: args.userId,
       provider: args.provider,
       providerDeviceId: args.macAddress,
-      name: args.name,
+      name: deviceName,
       createdAt: Date.now(),
     });
+
+    console.log(`[ADD DEVICE] Created device ${deviceId} for user ${args.userId}, MAC: ${args.macAddress}`);
+
+    // Check if user has provider credentials and trigger immediate sync
+    const config = await ctx.db
+      .query("providerConfigs")
+      .withIndex("by_userId_and_provider", (q) =>
+        q.eq("userId", args.userId).eq("provider", args.provider)
+      )
+      .first();
+
+    if (config && config.accessToken) {
+      // Schedule immediate sync to fetch readings for the new device
+      await ctx.scheduler.runAfter(0, internal.providersActions.syncDevicesForUser, {
+        userId: args.userId,
+        provider: args.provider,
+      });
+      console.log(`[ADD DEVICE] Scheduled immediate sync for user ${args.userId} after adding device ${deviceId}`);
+    } else {
+      // No credentials yet - this might be a first-time user where connectAndSync is still running
+      // Schedule a delayed sync to catch cases where credentials are saved shortly after
+      console.log(`[ADD DEVICE] No provider credentials found yet for user ${args.userId}, scheduling delayed sync`);
+      await ctx.scheduler.runAfter(3000, internal.providersActions.syncDevicesForUser, {
+        userId: args.userId,
+        provider: args.provider,
+      });
+    }
+
+    return deviceId;
   },
 });
 
@@ -410,5 +491,39 @@ export const forceClaimDevice = mutation({
     await ctx.db.delete(existing._id);
 
     return null;
+  },
+});
+
+/**
+ * Clean up orphaned readings (readings that reference deleted devices).
+ * This is a utility function to fix data integrity issues.
+ * Can be called manually or scheduled as a cron job.
+ */
+export const cleanupOrphanedReadings = internalMutation({
+  args: {},
+  returns: v.object({
+    orphanedReadingsDeleted: v.number(),
+  }),
+  handler: async (ctx) => {
+    let orphanedCount = 0;
+    
+    // Get all readings
+    const allReadings = await ctx.db.query("readings").collect();
+    
+    for (const reading of allReadings) {
+      // Check if the device still exists
+      const device = await ctx.db.get(reading.deviceId);
+      if (!device) {
+        // Device doesn't exist, delete the orphaned reading
+        await ctx.db.delete(reading._id);
+        orphanedCount++;
+      }
+    }
+    
+    if (orphanedCount > 0) {
+      console.log(`[CLEANUP] Deleted ${orphanedCount} orphaned readings`);
+    }
+    
+    return { orphanedReadingsDeleted: orphanedCount };
   },
 });

@@ -26,7 +26,7 @@ export declare const api: {
       "public",
       {
         macAddress: string;
-        name: string;
+        name?: string;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         userId: Id<"users">;
       },
@@ -36,7 +36,11 @@ export declare const api: {
       "mutation",
       "public",
       { deviceId: Id<"devices"> },
-      null
+      {
+        embedTokensDeleted: number;
+        kioskConfigsUpdated: number;
+        readingsDeleted: number;
+      }
     >;
     forceClaimDevice: FunctionReference<
       "mutation",
@@ -292,6 +296,16 @@ export declare const api: {
       },
       null
     >;
+    updateDeviceReportInterval: FunctionReference<
+      "action",
+      "public",
+      {
+        deviceId: Id<"devices">;
+        reportIntervalSeconds: number;
+        userId: Id<"users">;
+      },
+      { message: string; success: boolean }
+    >;
   };
   public: {
     getEmbedDevice: FunctionReference<
@@ -532,6 +546,12 @@ export declare const api: {
  */
 export declare const internal: {
   devices: {
+    cleanupOrphanedReadings: FunctionReference<
+      "mutation",
+      "internal",
+      {},
+      { orphanedReadingsDeleted: number }
+    >;
     getByProviderDeviceId: FunctionReference<
       "query",
       "internal",
@@ -540,6 +560,28 @@ export declare const internal: {
         providerDeviceId: string;
       },
       null | { _id: Id<"devices">; userId: Id<"users"> }
+    >;
+    getInternal: FunctionReference<
+      "query",
+      "internal",
+      { deviceId: Id<"devices"> },
+      null | {
+        _creationTime: number;
+        _id: Id<"devices">;
+        createdAt: number;
+        dashboardMetrics?: Array<string>;
+        hiddenMetrics?: Array<string>;
+        lastBattery?: number;
+        lastReadingAt?: number;
+        model?: string;
+        name: string;
+        provider: "qingping" | "purpleair" | "iqair" | "temtop";
+        providerDeviceId: string;
+        providerOffline?: boolean;
+        roomId?: Id<"rooms">;
+        timezone?: string;
+        userId: Id<"users">;
+      }
     >;
     isDeletedForUser: FunctionReference<
       "query",
