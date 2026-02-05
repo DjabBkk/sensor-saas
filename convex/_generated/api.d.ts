@@ -54,9 +54,11 @@ export declare const api: {
       null | {
         _creationTime: number;
         _id: Id<"devices">;
+        awaitingPostChangeReading?: boolean;
         createdAt: number;
         dashboardMetrics?: Array<string>;
         hiddenMetrics?: Array<string>;
+        intervalChangeAt?: number;
         lastBattery?: number;
         lastReadingAt?: number;
         model?: string;
@@ -82,9 +84,11 @@ export declare const api: {
       Array<{
         _creationTime: number;
         _id: Id<"devices">;
+        awaitingPostChangeReading?: boolean;
         createdAt: number;
         dashboardMetrics?: Array<string>;
         hiddenMetrics?: Array<string>;
+        intervalChangeAt?: number;
         lastBattery?: number;
         lastReadingAt?: number;
         model?: string;
@@ -410,6 +414,7 @@ export declare const api: {
         battery?: number;
         co2?: number;
         deviceId: Id<"devices">;
+        deviceName?: string;
         pm10?: number;
         pm25?: number;
         pressure?: number;
@@ -417,6 +422,29 @@ export declare const api: {
         tempC?: number;
         ts: number;
         voc?: number;
+      }>
+    >;
+    historyAggregated: FunctionReference<
+      "query",
+      "public",
+      {
+        bucketMinutes: number;
+        deviceId: Id<"devices">;
+        endTs: number;
+        startTs: number;
+      },
+      Array<{
+        aqi: number | null;
+        battery: number | null;
+        co2: number | null;
+        count: number;
+        pm10: number | null;
+        pm25: number | null;
+        pressure: number | null;
+        rh: number | null;
+        tempC: number | null;
+        ts: number;
+        voc: number | null;
       }>
     >;
     latest: FunctionReference<
@@ -430,6 +458,7 @@ export declare const api: {
         battery?: number;
         co2?: number;
         deviceId: Id<"devices">;
+        deviceName?: string;
         pm10?: number;
         pm25?: number;
         pressure?: number;

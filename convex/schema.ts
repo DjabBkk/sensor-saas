@@ -33,6 +33,8 @@ export default defineSchema({
     providerOffline: v.optional(v.boolean()),
     hiddenMetrics: v.optional(v.array(v.string())),
     dashboardMetrics: v.optional(v.array(v.string())),
+    intervalChangeAt: v.optional(v.number()),
+    awaitingPostChangeReading: v.optional(v.boolean()),
     createdAt: v.number(),
   })
     .index("by_userId", ["userId"])
@@ -40,6 +42,7 @@ export default defineSchema({
 
   readings: defineTable({
     deviceId: v.id("devices"),
+    deviceName: v.optional(v.string()),
     ts: v.number(),
     pm25: v.optional(v.number()),
     pm10: v.optional(v.number()),

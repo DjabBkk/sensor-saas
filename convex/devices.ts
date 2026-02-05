@@ -18,6 +18,8 @@ const deviceShape = v.object({
   providerOffline: v.optional(v.boolean()),
   hiddenMetrics: v.optional(v.array(v.string())),
   dashboardMetrics: v.optional(v.array(v.string())),
+  intervalChangeAt: v.optional(v.number()),
+  awaitingPostChangeReading: v.optional(v.boolean()),
   createdAt: v.number(),
 });
 

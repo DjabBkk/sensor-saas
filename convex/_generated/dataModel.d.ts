@@ -58,9 +58,11 @@ export type DataModel = {
   };
   devices: {
     document: {
+      awaitingPostChangeReading?: boolean;
       createdAt: number;
       dashboardMetrics?: Array<string>;
       hiddenMetrics?: Array<string>;
+      intervalChangeAt?: number;
       lastBattery?: number;
       lastReadingAt?: number;
       model?: string;
@@ -77,9 +79,11 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "awaitingPostChangeReading"
       | "createdAt"
       | "dashboardMetrics"
       | "hiddenMetrics"
+      | "intervalChangeAt"
       | "lastBattery"
       | "lastReadingAt"
       | "model"
@@ -215,6 +219,7 @@ export type DataModel = {
       battery?: number;
       co2?: number;
       deviceId: Id<"devices">;
+      deviceName?: string;
       pm10?: number;
       pm25?: number;
       pressure?: number;
@@ -232,6 +237,7 @@ export type DataModel = {
       | "battery"
       | "co2"
       | "deviceId"
+      | "deviceName"
       | "pm10"
       | "pm25"
       | "pressure"
