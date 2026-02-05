@@ -1,6 +1,4 @@
-import { planValidator } from "./validators";
-
-export type Plan = typeof planValidator._type;
+export type Plan = "free" | "basic" | "pro" | "team";
 
 /**
  * Get the minimum refresh interval (most frequent) allowed for a plan.
