@@ -58,9 +58,11 @@ export declare const api: {
       null | {
         _creationTime: number;
         _id: Id<"devices">;
+        awaitingPostChangeReading?: boolean;
         createdAt: number;
         dashboardMetrics?: Array<string>;
         hiddenMetrics?: Array<string>;
+        intervalChangeAt?: number;
         lastBattery?: number;
         lastReadingAt?: number;
         model?: string;
@@ -86,9 +88,11 @@ export declare const api: {
       Array<{
         _creationTime: number;
         _id: Id<"devices">;
+        awaitingPostChangeReading?: boolean;
         createdAt: number;
         dashboardMetrics?: Array<string>;
         hiddenMetrics?: Array<string>;
+        intervalChangeAt?: number;
         lastBattery?: number;
         lastReadingAt?: number;
         model?: string;
@@ -568,9 +572,11 @@ export declare const internal: {
       null | {
         _creationTime: number;
         _id: Id<"devices">;
+        awaitingPostChangeReading?: boolean;
         createdAt: number;
         dashboardMetrics?: Array<string>;
         hiddenMetrics?: Array<string>;
+        intervalChangeAt?: number;
         lastBattery?: number;
         lastReadingAt?: number;
         model?: string;
@@ -592,6 +598,16 @@ export declare const internal: {
         userId: Id<"users">;
       },
       boolean
+    >;
+    patchIntervalChangeState: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        awaitingPostChangeReading: boolean;
+        deviceId: Id<"devices">;
+        intervalChangeAt: number;
+      },
+      null
     >;
     upsertFromProvider: FunctionReference<
       "mutation",

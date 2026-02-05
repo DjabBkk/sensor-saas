@@ -405,6 +405,18 @@ export const updateDeviceReportInterval = action({
         timestamp: Date.now(), // Millisecond timestamp as required by API
       });
 
+      const changeAt = Date.now();
+      await ctx.runMutation(internal.devices.patchIntervalChangeState, {
+        deviceId: device._id,
+        intervalChangeAt: changeAt,
+        awaitingPostChangeReading: true,
+      });
+
+      await ctx.runAction(internal.providersActions.syncDevicesForUser, {
+        userId: args.userId,
+        provider: "qingping",
+      });
+
       const minutes = Math.round(args.reportIntervalSeconds / 60);
       console.log(
         `[UPDATE SETTINGS] Updated report interval for device ${device.providerDeviceId} to ${args.reportIntervalSeconds}s (${minutes} min)`

@@ -19,6 +19,8 @@ const deviceShape = v.object({
   providerOffline: v.optional(v.boolean()),
   hiddenMetrics: v.optional(v.array(v.string())),
   dashboardMetrics: v.optional(v.array(v.string())),
+  intervalChangeAt: v.optional(v.number()),
+  awaitingPostChangeReading: v.optional(v.boolean()),
   createdAt: v.number(),
 });
 
@@ -539,5 +541,22 @@ export const cleanupOrphanedReadings = internalMutation({
     }
     
     return { orphanedReadingsDeleted: orphanedCount };
+  },
+});
+
+export const patchIntervalChangeState = internalMutation({
+  args: {
+    deviceId: v.id("devices"),
+    intervalChangeAt: v.number(),
+    awaitingPostChangeReading: v.boolean(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.deviceId, {
+      intervalChangeAt: args.intervalChangeAt,
+      awaitingPostChangeReading: args.awaitingPostChangeReading,
+    });
+
+    return null;
   },
 });

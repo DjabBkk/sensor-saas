@@ -80,7 +80,15 @@ export const ingest = internalMutation({
       return null;
     }
 
-    if (normalizedTs < device.createdAt) {
+    if (device.awaitingPostChangeReading) {
+      if (!device.intervalChangeAt || normalizedTs < device.intervalChangeAt) {
+        return null;
+      }
+
+      await ctx.db.patch(args.deviceId, {
+        awaitingPostChangeReading: false,
+      });
+    } else if (device.lastReadingAt && normalizedTs < device.createdAt) {
       return null;
     }
 
