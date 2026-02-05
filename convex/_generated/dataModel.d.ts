@@ -70,6 +70,7 @@ export type DataModel = {
       provider: "qingping" | "purpleair" | "iqair" | "temtop";
       providerDeviceId: string;
       providerOffline?: boolean;
+      reportInterval?: number;
       roomId?: Id<"rooms">;
       timezone?: string;
       userId: Id<"users">;
@@ -91,6 +92,7 @@ export type DataModel = {
       | "provider"
       | "providerDeviceId"
       | "providerOffline"
+      | "reportInterval"
       | "roomId"
       | "timezone"
       | "userId";
@@ -137,6 +139,30 @@ export type DataModel = {
       by_deviceId: ["deviceId", "_creationTime"];
       by_token: ["token", "_creationTime"];
       by_userId: ["userId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  intervalChanges: {
+    document: {
+      changedAt: number;
+      deviceId: Id<"devices">;
+      newInterval: number;
+      previousInterval: number;
+      _id: Id<"intervalChanges">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "changedAt"
+      | "deviceId"
+      | "newInterval"
+      | "previousInterval";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_deviceId: ["deviceId", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

@@ -10,6 +10,7 @@ import { mapQingpingReading } from "./providers/qingping/mappers";
 import type { QingpingWebhookBody } from "./providers/types";
 
 const http = httpRouter();
+const normalizeTimestampMs = (ts: number) => (ts < 1e12 ? ts * 1000 : ts);
 
 http.route({
   path: "/webhooks/qingping",
@@ -68,6 +69,14 @@ http.route({
       return new Response("Invalid signature", { status: 401 });
     }
 
+    const device = await ctx.runQuery(internal.devices.getInternal, {
+      deviceId: deviceInfo._id,
+    });
+
+    const reportIntervalSeconds = device?.reportInterval ?? 3600;
+    const reportIntervalMs = reportIntervalSeconds * 1000;
+    let lastAcceptedTs = device?.lastReadingAt ?? 0;
+
     // Process readings for this device
     let processedCount = 0;
     for (const data of readings) {
@@ -76,9 +85,14 @@ http.route({
         continue;
       }
 
+      const readingTs = normalizeTimestampMs(reading.ts);
+      if (readingTs - lastAcceptedTs < reportIntervalMs * 0.9) {
+        continue;
+      }
+
       await ctx.runMutation(internal.readings.ingest, {
         deviceId: deviceInfo._id,
-        ts: reading.ts,
+        ts: readingTs,
         pm25: reading.pm25,
         pm10: reading.pm10,
         co2: reading.co2,
@@ -89,6 +103,7 @@ http.route({
         battery: reading.battery,
       });
       processedCount++;
+      lastAcceptedTs = readingTs;
     }
 
     const duration = Date.now() - startTime;

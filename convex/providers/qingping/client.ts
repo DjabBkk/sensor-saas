@@ -75,3 +75,31 @@ export const getHistoryData = async (
 
   return apiFetch(accessToken, `/v1/apis/devices/data?${params}`);
 };
+
+type UpdateDeviceSettingsParams = {
+  mac: string[];
+  report_interval: number;
+  collect_interval: number;
+  timestamp: number;
+};
+
+export const updateDeviceSettings = async (
+  accessToken: string,
+  params: UpdateDeviceSettingsParams,
+) => {
+  const response = await fetch(`${QINGPING_API_BASE}/v1/apis/devices/settings`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Qingping API error: ${response.status} - ${errorText}`);
+  }
+
+  return response.json();
+};

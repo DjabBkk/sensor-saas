@@ -5,8 +5,10 @@ import { v } from "convex/values";
 
 import { providerValidator } from "./lib/validators";
 import { internal } from "./_generated/api";
-import { getAccessToken, listDevices } from "./providers/qingping/client";
+import { getAccessToken, listDevices, updateDeviceSettings } from "./providers/qingping/client";
 import { mapQingpingDevice, mapQingpingReading } from "./providers/qingping/mappers";
+
+const normalizeTimestampMs = (ts: number) => (ts < 1e12 ? ts * 1000 : ts);
 
 export const fetchAccessToken = internalAction({
   args: {
@@ -291,6 +293,142 @@ export const refreshExpiringTokens = internalAction({
   },
 });
 
+/**
+ * Update device report interval (how often the device sends data).
+ * Minimum is 60 seconds (1 minute), maximum is 3600 seconds (1 hour).
+ * Common values: 60 (1 min), 300 (5 min), 600 (10 min), 1800 (30 min), 3600 (1 hour)
+ */
+export const updateDeviceReportInterval = action({
+  args: {
+    userId: v.id("users"),
+    deviceId: v.id("devices"),
+    reportIntervalSeconds: v.number(),
+  },
+  returns: v.object({
+    success: v.boolean(),
+    message: v.string(),
+  }),
+  handler: async (ctx, args) => {
+    // Validate report interval (minimum 60 seconds as per Qingping docs)
+    if (args.reportIntervalSeconds < 60) {
+      return {
+        success: false,
+        message: "Report interval must be at least 60 seconds (1 minute)",
+      };
+    }
+
+    if (args.reportIntervalSeconds > 3600) {
+      return {
+        success: false,
+        message: "Report interval cannot exceed 3600 seconds (1 hour)",
+      };
+    }
+
+    // Get device info
+    const device = await ctx.runQuery(internal.devices.getInternal, {
+      deviceId: args.deviceId,
+    });
+
+    if (!device) {
+      return {
+        success: false,
+        message: "Device not found",
+      };
+    }
+
+    if (device.userId !== args.userId) {
+      return {
+        success: false,
+        message: "Device does not belong to this user",
+      };
+    }
+
+    if (device.provider !== "qingping") {
+      return {
+        success: false,
+        message: "Report interval can only be changed for Qingping devices",
+      };
+    }
+
+    // Get provider config for access token
+    const config = await ctx.runQuery(internal.providers.getConfig, {
+      userId: args.userId,
+      provider: "qingping",
+    });
+
+    if (!config?.accessToken) {
+      return {
+        success: false,
+        message: "No Qingping credentials found. Please connect your Qingping account first.",
+      };
+    }
+
+    // Check if token needs refresh
+    let accessToken = config.accessToken;
+    const now = Date.now();
+    if (!config.tokenExpiresAt || config.tokenExpiresAt <= now + 5 * 60 * 1000) {
+      if (!config.appKey || !config.appSecret || !config._id) {
+        return {
+          success: false,
+          message: "Token expired and cannot be refreshed",
+        };
+      }
+      
+      const tokenResult = await getAccessToken(config.appKey, config.appSecret);
+      accessToken = tokenResult.accessToken;
+      
+      await ctx.runMutation(internal.providers.updateToken, {
+        providerConfigId: config._id,
+        accessToken: tokenResult.accessToken,
+        tokenExpiresAt: tokenResult.tokenExpiresAt,
+      });
+    }
+
+    // Call Qingping API to update device settings
+    // collect_interval should be <= report_interval
+    const collectInterval = Math.min(60, args.reportIntervalSeconds);
+    
+    try {
+      await updateDeviceSettings(accessToken, {
+        mac: [device.providerDeviceId],
+        report_interval: args.reportIntervalSeconds,
+        collect_interval: collectInterval,
+        timestamp: Date.now(),
+      });
+
+      if (device.reportInterval !== args.reportIntervalSeconds) {
+        await ctx.runMutation(internal.intervalChanges.record, {
+          deviceId: args.deviceId,
+          previousInterval: device.reportInterval ?? 60,
+          newInterval: args.reportIntervalSeconds,
+        });
+      }
+
+      // Update device record with the new interval
+      await ctx.runMutation(internal.devices.updateReportInterval, {
+        deviceId: args.deviceId,
+        reportInterval: args.reportIntervalSeconds,
+      });
+
+      const minutes = Math.round(args.reportIntervalSeconds / 60);
+      console.log(
+        `[UPDATE INTERVAL] Updated report interval for device ${device.providerDeviceId} to ${args.reportIntervalSeconds}s (${minutes} min)`
+      );
+
+      return {
+        success: true,
+        message: `Report interval updated to ${minutes} minute${minutes === 1 ? "" : "s"}`,
+      };
+    } catch (error) {
+      console.error("[UPDATE INTERVAL] Failed to update device settings:", error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : "Failed to update device settings",
+      };
+    }
+  },
+});
+
 export const pollAllReadings = internalAction({
   args: {},
   returns: v.null(),
@@ -409,9 +547,21 @@ export const pollAllReadings = internalAction({
           continue;
         }
 
+        const deviceRecord = await ctx.runQuery(internal.devices.getInternal, {
+          deviceId: deviceInfo._id,
+        });
+        const reportIntervalSeconds = deviceRecord?.reportInterval ?? 3600;
+        const reportIntervalMs = reportIntervalSeconds * 1000;
+        const lastReadingAt = deviceRecord?.lastReadingAt ?? 0;
+        const readingTs = normalizeTimestampMs(reading.ts);
+
+        if (readingTs - lastReadingAt < reportIntervalMs * 0.9) {
+          continue;
+        }
+
         await ctx.runMutation(internal.readings.ingest, {
           deviceId: deviceInfo._id,
-          ts: reading.ts,
+          ts: readingTs,
           pm25: reading.pm25,
           pm10: reading.pm10,
           co2: reading.co2,

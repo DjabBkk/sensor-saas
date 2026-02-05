@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useMutation } from "convex/react";
+import { useAction, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 
 import { api } from "@/convex/_generated/api";
@@ -19,16 +19,33 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle, Loader2, Trash2 } from "lucide-react";
+import { AlertTriangle, Loader2, Trash2, Clock } from "lucide-react";
 
 type DeviceSettingsDialogProps = {
   deviceId: Id<"devices">;
+  userId: Id<"users">;
   deviceName: string;
   hiddenMetrics?: string[];
   availableMetrics?: string[];
+  reportInterval?: number;
   trigger: React.ReactNode;
 };
+
+const INTERVAL_OPTIONS = [
+  { value: 60, label: "1 minute" },
+  { value: 300, label: "5 minutes" },
+  { value: 600, label: "10 minutes" },
+  { value: 1800, label: "30 minutes" },
+  { value: 3600, label: "1 hour" },
+];
 
 const METRIC_OPTIONS = [
   { key: "pm25", label: "PM2.5" },
@@ -42,15 +59,18 @@ const METRIC_OPTIONS = [
 
 export function DeviceSettingsDialog({
   deviceId,
+  userId,
   deviceName,
   hiddenMetrics,
   availableMetrics,
+  reportInterval,
   trigger,
 }: DeviceSettingsDialogProps) {
   const router = useRouter();
   const updateHiddenMetrics = useMutation(api.devices.updateHiddenMetrics);
   const renameDevice = useMutation(api.devices.rename);
   const deleteDevice = useMutation(api.devices.deleteDevice);
+  const updateReportInterval = useAction(api.providersActions.updateDeviceReportInterval);
 
   const [open, setOpen] = useState(false);
   const [renameValue, setRenameValue] = useState(deviceName);
@@ -66,6 +86,13 @@ export function DeviceSettingsDialog({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const [selectedInterval, setSelectedInterval] = useState<string>(
+    String(reportInterval ?? 3600)
+  );
+  const [isUpdatingInterval, setIsUpdatingInterval] = useState(false);
+  const [intervalError, setIntervalError] = useState<string | null>(null);
+  const [intervalSuccess, setIntervalSuccess] = useState<string | null>(null);
 
   const availableMetricSet = useMemo(
     () => new Set(availableMetrics ?? METRIC_OPTIONS.map((metric) => metric.key)),
@@ -90,14 +117,46 @@ export function DeviceSettingsDialog({
     if (open) {
       setRenameValue(deviceName);
       setHiddenMetricKeys(hiddenMetrics ?? []);
+      setSelectedInterval(String(reportInterval ?? 3600));
       setMetricsError(null);
       setRenameError(null);
+      setIntervalError(null);
+      setIntervalSuccess(null);
     }
   }, [
     deviceName,
     hiddenMetrics,
+    reportInterval,
     open,
   ]);
+
+  const handleIntervalChange = async (value: string) => {
+    setSelectedInterval(value);
+    setIntervalError(null);
+    setIntervalSuccess(null);
+    setIsUpdatingInterval(true);
+    
+    try {
+      const result = await updateReportInterval({
+        userId,
+        deviceId,
+        reportIntervalSeconds: Number(value),
+      });
+      
+      if (result.success) {
+        setIntervalSuccess(result.message);
+      } else {
+        setIntervalError(result.message);
+        // Revert to previous value on failure
+        setSelectedInterval(String(reportInterval ?? 3600));
+      }
+    } catch (err) {
+      setIntervalError(err instanceof Error ? err.message : "Failed to update interval");
+      setSelectedInterval(String(reportInterval ?? 3600));
+    } finally {
+      setIsUpdatingInterval(false);
+    }
+  };
 
   const handleToggleMetric = async (metricKey: string) => {
     setMetricsError(null);
@@ -209,6 +268,46 @@ export function DeviceSettingsDialog({
               </div>
               {metricsError && (
                 <p className="text-sm text-destructive">{metricsError}</p>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <h4 className="text-sm font-medium">Data Refresh Interval</h4>
+                  <p className="text-xs text-muted-foreground">
+                    How often the sensor sends new readings.
+                  </p>
+                </div>
+              </div>
+              <Select
+                value={selectedInterval}
+                onValueChange={handleIntervalChange}
+                disabled={isUpdatingInterval}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select interval" />
+                </SelectTrigger>
+                <SelectContent>
+                  {INTERVAL_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={String(option.value)}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {isUpdatingInterval && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Updating interval...
+                </div>
+              )}
+              {intervalError && (
+                <p className="text-sm text-destructive">{intervalError}</p>
+              )}
+              {intervalSuccess && (
+                <p className="text-sm text-emerald-500">{intervalSuccess}</p>
               )}
             </div>
 

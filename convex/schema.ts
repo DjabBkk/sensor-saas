@@ -35,10 +35,18 @@ export default defineSchema({
     dashboardMetrics: v.optional(v.array(v.string())),
     intervalChangeAt: v.optional(v.number()),
     awaitingPostChangeReading: v.optional(v.boolean()),
+    reportInterval: v.optional(v.number()),
     createdAt: v.number(),
   })
     .index("by_userId", ["userId"])
     .index("by_provider_and_providerDeviceId", ["provider", "providerDeviceId"]),
+
+  intervalChanges: defineTable({
+    deviceId: v.id("devices"),
+    previousInterval: v.number(),
+    newInterval: v.number(),
+    changedAt: v.number(),
+  }).index("by_deviceId", ["deviceId"]),
 
   readings: defineTable({
     deviceId: v.id("devices"),

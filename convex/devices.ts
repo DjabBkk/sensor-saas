@@ -20,6 +20,7 @@ const deviceShape = v.object({
   dashboardMetrics: v.optional(v.array(v.string())),
   intervalChangeAt: v.optional(v.number()),
   awaitingPostChangeReading: v.optional(v.boolean()),
+  reportInterval: v.optional(v.number()),
   createdAt: v.number(),
 });
 
@@ -257,6 +258,7 @@ export const upsertFromProvider = internalMutation({
       model: args.model,
       timezone: args.timezone,
       providerOffline: args.providerOffline,
+      reportInterval: 3600,
       createdAt: Date.now(),
     });
   },
@@ -348,6 +350,7 @@ export const addByMac = mutation({
       provider: args.provider,
       providerDeviceId: args.macAddress,
       name: args.name,
+      reportInterval: 3600,
       createdAt: Date.now(),
     });
   },
@@ -371,6 +374,30 @@ export const isDeletedForUser = internalQuery({
       )
       .first();
     return Boolean(existing);
+  },
+});
+
+export const getInternal = internalQuery({
+  args: {
+    deviceId: v.id("devices"),
+  },
+  returns: v.union(v.null(), deviceShape),
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.deviceId);
+  },
+});
+
+export const updateReportInterval = internalMutation({
+  args: {
+    deviceId: v.id("devices"),
+    reportInterval: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.deviceId, {
+      reportInterval: args.reportInterval,
+    });
+    return null;
   },
 });
 
