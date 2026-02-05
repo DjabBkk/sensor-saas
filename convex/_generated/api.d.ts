@@ -144,6 +144,7 @@ export declare const api: {
         description?: string;
         deviceId: Id<"devices">;
         label?: string;
+        refreshInterval?: number;
         size?: "small" | "medium" | "large";
         userId: Id<"users">;
       },
@@ -155,6 +156,7 @@ export declare const api: {
         deviceId: Id<"devices">;
         isRevoked: boolean;
         label?: string;
+        refreshInterval?: number;
         size?: "small" | "medium" | "large";
         token: string;
         userId: Id<"users">;
@@ -172,6 +174,7 @@ export declare const api: {
         deviceId: Id<"devices">;
         isRevoked: boolean;
         label?: string;
+        refreshInterval?: number;
         size?: "small" | "medium" | "large";
         token: string;
         userId: Id<"users">;
@@ -189,6 +192,7 @@ export declare const api: {
         deviceId: Id<"devices">;
         isRevoked: boolean;
         label?: string;
+        refreshInterval?: number;
         size?: "small" | "medium" | "large";
         token: string;
         userId: Id<"users">;
@@ -199,6 +203,24 @@ export declare const api: {
       "public",
       { tokenId: Id<"embedTokens"> },
       null
+    >;
+    updateRefreshInterval: FunctionReference<
+      "mutation",
+      "public",
+      { refreshInterval: number; tokenId: Id<"embedTokens"> },
+      {
+        _creationTime: number;
+        _id: Id<"embedTokens">;
+        createdAt: number;
+        description?: string;
+        deviceId: Id<"devices">;
+        isRevoked: boolean;
+        label?: string;
+        refreshInterval?: number;
+        size?: "small" | "medium" | "large";
+        token: string;
+        userId: Id<"users">;
+      }
     >;
   };
   intervalChanges: {
@@ -353,7 +375,11 @@ export declare const api: {
           timezone?: string;
           userId: Id<"users">;
         };
-        embed: { description?: string; size?: "small" | "medium" | "large" };
+        embed: {
+          description?: string;
+          refreshInterval?: number;
+          size?: "small" | "medium" | "large";
+        };
         history: Array<{
           _creationTime: number;
           _id: Id<"readings">;
@@ -698,6 +724,7 @@ export declare const internal: {
         deviceId: Id<"devices">;
         isRevoked: boolean;
         label?: string;
+        refreshInterval?: number;
         size?: "small" | "medium" | "large";
         token: string;
         userId: Id<"users">;

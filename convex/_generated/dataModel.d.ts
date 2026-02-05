@@ -125,6 +125,7 @@ export type DataModel = {
       deviceId: Id<"devices">;
       isRevoked: boolean;
       label?: string;
+      refreshInterval?: number;
       size?: "small" | "medium" | "large";
       token: string;
       userId: Id<"users">;
@@ -139,6 +140,7 @@ export type DataModel = {
       | "deviceId"
       | "isRevoked"
       | "label"
+      | "refreshInterval"
       | "size"
       | "token"
       | "userId";

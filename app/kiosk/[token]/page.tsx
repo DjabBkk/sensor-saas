@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState, use } from "react";
 import { useQuery } from "convex/react";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/convex/_generated/api";
-import { getDeviceStatus } from "@/lib/deviceStatus";
 import { KioskSingle } from "@/components/kiosk/KioskSingle";
 import { KioskGrid } from "@/components/kiosk/KioskGrid";
 
@@ -55,18 +54,14 @@ export default function KioskPage({ params }: { params: Promise<{ token: string 
           data.devices[0] ? (
             (() => {
               const entry = data.devices[0];
-              const status = getDeviceStatus({
-                lastReadingAt: entry.device.lastReadingAt,
-                lastBattery: entry.device.lastBattery,
-                providerOffline: entry.device.providerOffline,
-              });
-              const reading = status.isOnline ? entry.latestReading : null;
+              // Always show last reading, regardless of online status
+              const reading = entry.latestReading;
 
               return (
                 <KioskSingle
                   deviceName={entry.device.name}
                   model={entry.device.model ?? undefined}
-                  isOnline={status.isOnline}
+                  isOnline={true}
                   pm25={reading?.pm25}
                   co2={reading?.co2}
                   tempC={reading?.tempC}
@@ -82,17 +77,13 @@ export default function KioskPage({ params }: { params: Promise<{ token: string 
         ) : (
           <KioskGrid
             devices={data.devices.map((entry) => {
-              const status = getDeviceStatus({
-                lastReadingAt: entry.device.lastReadingAt,
-                lastBattery: entry.device.lastBattery,
-                providerOffline: entry.device.providerOffline,
-              });
-              const reading = status.isOnline ? entry.latestReading : null;
+              // Always show last reading, regardless of online status
+              const reading = entry.latestReading;
 
               return {
                 deviceId: entry.device._id,
                 deviceName: entry.device.name,
-                isOnline: status.isOnline,
+                isOnline: true,
                 pm25: reading?.pm25,
                 co2: reading?.co2,
                 tempC: reading?.tempC,

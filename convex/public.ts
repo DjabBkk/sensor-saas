@@ -45,6 +45,7 @@ export const getEmbedDevice = query({
       embed: v.object({
         description: v.optional(v.string()),
         size: v.optional(v.union(v.literal("small"), v.literal("medium"), v.literal("large"))),
+        refreshInterval: v.optional(v.number()),
       }),
       device: deviceShape,
       latestReading: v.union(v.null(), readingShape),
@@ -86,6 +87,7 @@ export const getEmbedDevice = query({
       embed: {
         description: embedToken.description,
         size: embedToken.size,
+        refreshInterval: embedToken.refreshInterval,
       },
       device,
       latestReading: latestReading ?? null,

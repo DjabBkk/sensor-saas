@@ -4,7 +4,6 @@ import { useEffect, useState, use } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { getDeviceStatus } from "@/lib/deviceStatus";
 import { BadgeSmall } from "@/components/embed/BadgeSmall";
 import { BadgeMedium } from "@/components/embed/BadgeMedium";
 import { BadgeLarge } from "@/components/embed/BadgeLarge";
@@ -20,17 +19,19 @@ export default function EmbedBadgePage({
   const sizeParam = searchParams.get("size");
   const [refreshKey, setRefreshKey] = useState(0);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setRefreshKey((prev) => prev + 1);
-    }, 60000);
-    return () => clearInterval(interval);
-  }, []);
-
   const data = useQuery(
     api.public.getEmbedDevice,
     token ? { token, refreshKey } : "skip"
   );
+
+  useEffect(() => {
+    // Use refreshInterval from embed config, or default to 60 seconds
+    const refreshMs = (data?.embed.refreshInterval ?? 60) * 1000;
+    const interval = setInterval(() => {
+      setRefreshKey((prev) => prev + 1);
+    }, refreshMs);
+    return () => clearInterval(interval);
+  }, [data?.embed.refreshInterval]);
 
   if (data === undefined) {
     return null;
@@ -48,12 +49,8 @@ export default function EmbedBadgePage({
     <div className={theme === "dark" ? "dark" : ""}>
       <div className="flex min-h-screen items-center justify-center bg-background p-4 text-foreground">
         {(() => {
-          const status = getDeviceStatus({
-            lastReadingAt: data.device.lastReadingAt,
-            lastBattery: data.device.lastBattery,
-            providerOffline: data.device.providerOffline,
-          });
-          const reading = status.isOnline ? data.latestReading : null;
+          // Always show last reading, regardless of online status
+          const reading = data.latestReading;
           const size =
             sizeParam === "small" || sizeParam === "medium" || sizeParam === "large"
               ? sizeParam
@@ -62,19 +59,19 @@ export default function EmbedBadgePage({
           return (
             <>
               {size === "small" && (
-                <BadgeSmall isOnline={status.isOnline} pm25={reading?.pm25} />
+                <BadgeSmall isOnline={true} pm25={reading?.pm25} />
               )}
               {size === "medium" && (
                 <BadgeMedium
                   title={data.embed.description}
-                  isOnline={status.isOnline}
+                  isOnline={true}
                   pm25={reading?.pm25}
                 />
               )}
               {size === "large" && (
                 <BadgeLarge
                   title={data.embed.description}
-                  isOnline={status.isOnline}
+                  isOnline={true}
                   pm25={reading?.pm25}
                   co2={reading?.co2}
                 />

@@ -42,6 +42,7 @@ export default function DeviceEmbedPage({
   const getOrCreateUser = useMutation(api.users.getOrCreateUser);
   const createToken = useMutation(api.embedTokens.create);
   const revokeToken = useMutation(api.embedTokens.revoke);
+  const updateRefreshInterval = useMutation(api.embedTokens.updateRefreshInterval);
 
   const [convexUserId, setConvexUserId] = useState<Id<"users"> | null>(null);
   const [label, setLabel] = useState("");
@@ -49,6 +50,7 @@ export default function DeviceEmbedPage({
   const [style, setStyle] = useState<EmbedStyle>("card");
   const [theme, setTheme] = useState<EmbedTheme>("dark");
   const [size, setSize] = useState<EmbedSize>("medium");
+  const [refreshInterval, setRefreshInterval] = useState<number | null>(null);
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
   const [origin, setOrigin] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +99,10 @@ export default function DeviceEmbedPage({
     deviceId: deviceId as Id<"devices">,
     limit: 96,
   });
+  const convexUser = useQuery(
+    api.users.getCurrentUser,
+    userId ? { authId: userId } : "skip"
+  );
 
   const activeTokens = useMemo(
     () => (tokens ?? []).filter((token) => !token.isRevoked),
@@ -119,7 +125,43 @@ export default function DeviceEmbedPage({
     if (selectedToken.size) {
       setSize(selectedToken.size);
     }
+    if (selectedToken.refreshInterval !== undefined) {
+      setRefreshInterval(selectedToken.refreshInterval);
+    }
   }, [selectedToken]);
+
+  // Generate refresh interval options based on plan
+  const refreshIntervalOptions = useMemo(() => {
+    if (!convexUser?.plan) return [];
+    
+    const plan = convexUser.plan;
+    const options: { value: number; label: string }[] = [];
+    
+    if (plan === "free") {
+      // Free plan: 10 minutes to 1 hour
+      options.push({ value: 10 * 60, label: "10 minutes" });
+      options.push({ value: 15 * 60, label: "15 minutes" });
+      options.push({ value: 30 * 60, label: "30 minutes" });
+      options.push({ value: 60 * 60, label: "1 hour" });
+    } else {
+      // Paid plans: 1 minute to 1 hour (matching device intervals)
+      options.push({ value: 60, label: "1 minute" });
+      options.push({ value: 5 * 60, label: "5 minutes" });
+      options.push({ value: 10 * 60, label: "10 minutes" });
+      options.push({ value: 30 * 60, label: "30 minutes" });
+      options.push({ value: 60 * 60, label: "1 hour" });
+    }
+    
+    return options;
+  }, [convexUser?.plan]);
+
+  // Set default refresh interval based on plan when user loads
+  useEffect(() => {
+    if (convexUser?.plan && refreshInterval === null) {
+      const defaultInterval = convexUser.plan === "free" ? 10 * 60 : 60;
+      setRefreshInterval(defaultInterval);
+    }
+  }, [convexUser?.plan, refreshInterval]);
   const widgetDimensions = useMemo(() => {
     if (style === "badge") {
       if (size === "small") return { width: 160, height: 40 };
@@ -165,6 +207,18 @@ export default function DeviceEmbedPage({
       setSelectedTokenId(created._id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create token.");
+    }
+  };
+
+  const handleUpdateRefreshInterval = async (tokenId: Id<"embedTokens">, newInterval: number) => {
+    try {
+      await updateRefreshInterval({
+        tokenId,
+        refreshInterval: newInterval,
+      });
+      setRefreshInterval(newInterval);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update refresh interval.");
     }
   };
 
@@ -260,7 +314,7 @@ export default function DeviceEmbedPage({
               <CardTitle>Snippet generator</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
                 <div className="space-y-2">
                   <Label>Token</Label>
                   <Select
@@ -313,6 +367,30 @@ export default function DeviceEmbedPage({
                     <SelectContent>
                       <SelectItem value="dark">Dark</SelectItem>
                       <SelectItem value="light">Light</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Update frequency</Label>
+                  <Select
+                    value={refreshInterval !== null ? String(refreshInterval) : undefined}
+                    onValueChange={(val) => {
+                      const newInterval = Number(val);
+                      setRefreshInterval(newInterval);
+                      if (selectedTokenId) {
+                        handleUpdateRefreshInterval(selectedTokenId as Id<"embedTokens">, newInterval);
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select frequency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {refreshIntervalOptions.map((option) => (
+                        <SelectItem key={option.value} value={String(option.value)}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

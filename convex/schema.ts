@@ -87,6 +87,7 @@ export default defineSchema({
     label: v.optional(v.string()),
     description: v.optional(v.string()),
     size: v.optional(v.union(v.literal("small"), v.literal("medium"), v.literal("large"))),
+    refreshInterval: v.optional(v.number()), // in seconds
     isRevoked: v.boolean(),
     createdAt: v.number(),
   })
