@@ -360,7 +360,24 @@ export default function DeviceEmbedPage({
               <p className="text-sm text-muted-foreground">Loading preview...</p>
             ) : (
               <div className={theme === "dark" ? "dark" : ""}>
-                <div className="flex items-center justify-center rounded-lg border border-border bg-background p-6 text-foreground">
+                {/* Force light mode when theme is light, even if parent is dark */}
+                <div 
+                  className="flex items-center justify-center rounded-lg border border-border p-6 bg-background text-foreground"
+                  style={theme === "light" ? {
+                    colorScheme: "light",
+                    // Override dark mode CSS variables with light mode values
+                    backgroundColor: "#FAF9F7",
+                    color: "#1C1917",
+                    // Ensure child elements also use light mode
+                    "--background": "#FAF9F7",
+                    "--foreground": "#1C1917",
+                    "--card": "#FFFFFF",
+                    "--card-foreground": "#1C1917",
+                    "--border": "#E7E5E4",
+                    "--muted": "#F5F5F4",
+                    "--muted-foreground": "#78716C",
+                  } as React.CSSProperties & Record<string, string> : undefined}
+                >
                   {(() => {
                     const status = getDeviceStatus({
                       lastReadingAt: device.lastReadingAt,
