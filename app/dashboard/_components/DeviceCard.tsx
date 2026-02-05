@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/chart";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { Settings } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 type Reading = {
   _id: Id<"readings">;
@@ -137,7 +138,7 @@ const getTooltipLabelFormatter = (range: keyof typeof TIME_RANGES) => {
 };
 
 function getOfflineReasonLabel(
-  reason: "battery" | "provider" | "stale" | "unknown" | null
+  reason: "battery" | "provider" | "stale" | "overdue" | "unknown" | null
 ) {
   switch (reason) {
     case "battery":
@@ -146,6 +147,8 @@ function getOfflineReasonLabel(
       return "Disconnected";
     case "stale":
       return "No readings yet";
+    case "overdue":
+      return "May be offline";
     case "unknown":
       return "Unknown";
     default:
@@ -172,6 +175,7 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
     lastReadingAt: reading?.ts ?? device.lastReadingAt,
     lastBattery: device.lastBattery,
     providerOffline: device.providerOffline,
+    reportInterval: device.reportInterval,
   });
 
   // Track which metrics are selected for comparison (right is optional)
@@ -414,12 +418,22 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-2xl font-bold">{device.name}</h2>
-              {/* Status dot */}
+              {/* Status dot - green: online, amber: overdue, red: confirmed offline */}
               <span
                 className={`h-2.5 w-2.5 rounded-full ${
-                  status.isOnline ? "bg-emerald-500" : "bg-red-500"
+                  status.isOnline
+                    ? "bg-emerald-500"
+                    : status.isReadingOverdue && !status.isProviderOffline && !status.isBatteryEmpty
+                      ? "bg-amber-500"
+                      : "bg-red-500"
                 }`}
-                title={status.isOnline ? "Online" : "Offline"}
+                title={
+                  status.isOnline
+                    ? "Online"
+                    : status.isReadingOverdue
+                      ? `No data for ${status.overdueMinutes ?? "?"} min`
+                      : "Offline"
+                }
               />
               <DeviceSettingsDialog
                 deviceId={device._id}
@@ -439,6 +453,15 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
                   </Button>
                 }
               />
+              {/* Offline warning badge - inline with gear icon */}
+              {status.isReadingOverdue && (
+                <Badge 
+                  variant="outline" 
+                  className="border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                >
+                  Device offline for {status.overdueMinutes ?? "?"} minutes. Check status or charge battery.
+                </Badge>
+              )}
             </div>
             <p className="text-sm text-muted-foreground">
               {device.model ?? "Qingping"}
@@ -670,6 +693,7 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
                     stroke={METRIC_COLORS[leftMetric]}
                     strokeWidth={2}
                     name={METRIC_INFO[leftMetric].label}
+                    connectNulls={false}
                   />
                   {/* Comparison metric area (optional) */}
                   {rightMetric && (
@@ -681,6 +705,7 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
                       stroke={METRIC_COLORS[rightMetric]}
                       strokeWidth={2}
                       name={METRIC_INFO[rightMetric].label}
+                      connectNulls={false}
                     />
                   )}
                   <ChartLegend content={<ChartLegendContent />} />

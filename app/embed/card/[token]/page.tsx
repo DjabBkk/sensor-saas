@@ -4,7 +4,6 @@ import { useEffect, useState, use } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { getDeviceStatus } from "@/lib/deviceStatus";
 import { CardSmall } from "@/components/embed/CardSmall";
 import { CardMedium } from "@/components/embed/CardMedium";
 import { CardLarge } from "@/components/embed/CardLarge";
@@ -20,17 +19,19 @@ export default function EmbedCardPage({
   const sizeParam = searchParams.get("size");
   const [refreshKey, setRefreshKey] = useState(0);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setRefreshKey((prev) => prev + 1);
-    }, 60000);
-    return () => clearInterval(interval);
-  }, []);
-
   const data = useQuery(
     api.public.getEmbedDevice,
     token ? { token, refreshKey } : "skip"
   );
+
+  useEffect(() => {
+    // Use refreshInterval from embed config, or default to 60 seconds
+    const refreshMs = (data?.embed.refreshInterval ?? 60) * 1000;
+    const interval = setInterval(() => {
+      setRefreshKey((prev) => prev + 1);
+    }, refreshMs);
+    return () => clearInterval(interval);
+  }, [data?.embed.refreshInterval]);
 
   if (data === undefined) {
     return null;
@@ -48,12 +49,8 @@ export default function EmbedCardPage({
     <div className={theme === "dark" ? "dark" : ""}>
       <div className="flex min-h-screen items-center justify-center bg-background p-6 text-foreground">
         {(() => {
-          const status = getDeviceStatus({
-            lastReadingAt: data.device.lastReadingAt,
-            lastBattery: data.device.lastBattery,
-            providerOffline: data.device.providerOffline,
-          });
-          const reading = status.isOnline ? data.latestReading : null;
+          // Always show last reading, regardless of online status
+          const reading = data.latestReading;
           const size =
             sizeParam === "small" || sizeParam === "medium" || sizeParam === "large"
               ? sizeParam
@@ -64,7 +61,7 @@ export default function EmbedCardPage({
               {size === "small" && (
                 <CardSmall
                   title={data.embed.description}
-                  isOnline={status.isOnline}
+                  isOnline={true}
                   pm25={reading?.pm25}
                   co2={reading?.co2}
                 />
@@ -72,7 +69,7 @@ export default function EmbedCardPage({
               {size === "medium" && (
                 <CardMedium
                   title={data.embed.description}
-                  isOnline={status.isOnline}
+                  isOnline={true}
                   pm25={reading?.pm25}
                   co2={reading?.co2}
                   tempC={reading?.tempC}
@@ -82,7 +79,7 @@ export default function EmbedCardPage({
               {size === "large" && (
                 <CardLarge
                   title={data.embed.description}
-                  isOnline={status.isOnline}
+                  isOnline={true}
                   pm25={reading?.pm25}
                   co2={reading?.co2}
                   tempC={reading?.tempC}

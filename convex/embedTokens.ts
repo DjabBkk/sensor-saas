@@ -1,5 +1,7 @@
 import { query, mutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
+import { getDefaultRefreshInterval, isValidRefreshInterval } from "./lib/planLimits";
 
 const embedTokenShape = v.object({
   _id: v.id("embedTokens"),
@@ -10,6 +12,7 @@ const embedTokenShape = v.object({
   label: v.optional(v.string()),
   description: v.optional(v.string()),
   size: v.optional(v.union(v.literal("small"), v.literal("medium"), v.literal("large"))),
+  refreshInterval: v.optional(v.number()),
   isRevoked: v.boolean(),
   createdAt: v.number(),
 });
@@ -53,9 +56,28 @@ export const create = mutation({
     label: v.optional(v.string()),
     description: v.optional(v.string()),
     size: v.optional(v.union(v.literal("small"), v.literal("medium"), v.literal("large"))),
+    refreshInterval: v.optional(v.number()),
   },
   returns: embedTokenShape,
   handler: async (ctx, args) => {
+    // Get user plan to validate refresh interval
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      throw new Error("User not found.");
+    }
+
+    // Validate refresh interval if provided
+    if (args.refreshInterval !== undefined) {
+      if (!isValidRefreshInterval(user.plan, args.refreshInterval)) {
+        throw new Error(
+          `Refresh interval must be between ${Math.floor(getDefaultRefreshInterval(user.plan) / 60)} minutes and 60 minutes for your plan.`
+        );
+      }
+    }
+
+    // Use provided interval or default based on plan
+    const refreshInterval = args.refreshInterval ?? getDefaultRefreshInterval(user.plan);
+
     let token = generateToken();
     let existing = await ctx.db
       .query("embedTokens")
@@ -83,6 +105,7 @@ export const create = mutation({
       label: args.label,
       description: args.description,
       size: args.size,
+      refreshInterval,
       isRevoked: false,
       createdAt: Date.now(),
     });
@@ -116,5 +139,42 @@ export const getByToken = internalQuery({
       .query("embedTokens")
       .withIndex("by_token", (q) => q.eq("token", args.token))
       .unique();
+  },
+});
+
+export const updateRefreshInterval = mutation({
+  args: {
+    tokenId: v.id("embedTokens"),
+    refreshInterval: v.number(),
+  },
+  returns: embedTokenShape,
+  handler: async (ctx, args) => {
+    const token = await ctx.db.get(args.tokenId);
+    if (!token || token.isRevoked) {
+      throw new Error("Token not found or revoked.");
+    }
+
+    // Get user plan to validate refresh interval
+    const user = await ctx.db.get(token.userId);
+    if (!user) {
+      throw new Error("User not found.");
+    }
+
+    // Validate refresh interval
+    if (!isValidRefreshInterval(user.plan, args.refreshInterval)) {
+      throw new Error(
+        `Refresh interval must be between ${Math.floor(getDefaultRefreshInterval(user.plan) / 60)} minutes and 60 minutes for your plan.`
+      );
+    }
+
+    await ctx.db.patch(args.tokenId, {
+      refreshInterval: args.refreshInterval,
+    });
+
+    const updated = await ctx.db.get(args.tokenId);
+    if (!updated) {
+      throw new Error("Failed to update token.");
+    }
+    return updated;
   },
 });

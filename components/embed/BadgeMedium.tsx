@@ -23,9 +23,12 @@ export function BadgeMedium({
       <div className="flex items-center gap-3">
         {!isOnline && <Badge variant="secondary">Offline</Badge>}
         <div>
-          <p className={`text-lg font-semibold ${level?.color ?? "text-foreground"}`}>
-            {formatNumber(displayPm25)}
-          </p>
+          <div className="flex items-baseline gap-1">
+            <p className="text-xs text-muted-foreground">PM2.5</p>
+            <p className={`text-lg font-semibold ${level?.color ?? "text-foreground"}`}>
+              {formatNumber(displayPm25)}
+            </p>
+          </div>
           {level && <p className={`text-xs font-medium ${level.color}`}>{level.label}</p>}
         </div>
       </div>

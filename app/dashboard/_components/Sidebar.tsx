@@ -25,8 +25,6 @@ import {
   User,
   Plus,
   Wind,
-  Wifi,
-  WifiOff,
   Monitor,
   Code,
   ChevronRight,
@@ -43,6 +41,7 @@ type Device = {
   lastReadingAt?: number;
   lastBattery?: number;
   providerOffline?: boolean;
+  reportInterval?: number;
 };
 
 type Room = {
@@ -321,6 +320,7 @@ function DeviceSidebarItem({
     lastReadingAt,
     lastBattery: device.lastBattery,
     providerOffline: device.providerOffline,
+    reportInterval: device.reportInterval,
   });
 
   return (
@@ -332,11 +332,23 @@ function DeviceSidebarItem({
             size="sm"
             className="group w-full justify-start gap-2 text-left hover:bg-accent/60"
           >
-            {status.isOnline ? (
-              <Wifi className="h-3 w-3 text-emerald-500" />
-            ) : (
-              <WifiOff className="h-3 w-3 text-muted-foreground" />
-            )}
+            {/* Status dot - green: online, amber: overdue, red: confirmed offline */}
+            <span
+              className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${
+                status.isOnline
+                  ? "bg-emerald-500"
+                  : status.isReadingOverdue && !status.isProviderOffline && !status.isBatteryEmpty
+                    ? "bg-amber-500"
+                    : "bg-red-500"
+              }`}
+              title={
+                status.isOnline
+                  ? "Online"
+                  : status.isReadingOverdue
+                    ? `No data for ${status.overdueMinutes ?? "?"} min`
+                    : "Offline"
+              }
+            />
             {!isCollapsed && (
               <>
                 <span className="flex-1 truncate text-xs">{device.name}</span>
@@ -349,7 +361,11 @@ function DeviceSidebarItem({
       <TooltipContent side="right">
         <p>{device.model ?? "Qingping device"}</p>
         <p className="text-xs text-muted-foreground">
-          {status.isOnline ? "Online" : "Offline"}
+          {status.isOnline
+            ? "Online"
+            : status.isReadingOverdue
+              ? `No data for ${status.overdueMinutes ?? "?"} min`
+              : "Offline"}
         </p>
       </TooltipContent>
     </Tooltip>

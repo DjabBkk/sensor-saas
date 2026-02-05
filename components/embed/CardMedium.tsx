@@ -31,13 +31,13 @@ export function CardMedium({
 
   return (
     <Card className="w-full max-w-sm">
-      <CardHeader className="space-y-1">
+      <CardHeader className="space-y-1 pb-3">
         <div className="flex items-center justify-between gap-2">
           {title && <CardTitle className="text-lg">{title}</CardTitle>}
           {!isOnline && <Badge variant="secondary">Offline</Badge>}
         </div>
       </CardHeader>
-      <CardContent className="grid grid-cols-2 gap-4">
+      <CardContent className="grid grid-cols-2 gap-4 pt-0">
         <div>
           <p className="text-xs text-muted-foreground">PM2.5</p>
           <p className={`text-2xl font-semibold ${pm25Level?.color ?? "text-foreground"}`}>

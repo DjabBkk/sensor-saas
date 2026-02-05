@@ -23,6 +23,7 @@ import {
 import { RadialGaugeInline } from "@/components/ui/radial-gauge";
 import { SecondaryMetricItem, type MetricKey } from "@/components/ui/secondary-metric";
 import { Plus, Settings } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { useAddDeviceDialog } from "./_components/add-device-context";
 import { DeviceSettingsDialog } from "@/app/dashboard/_components/DeviceSettingsDialog";
 
@@ -143,6 +144,7 @@ function DeviceOverviewCard({
     lastReadingAt,
     lastBattery: device.lastBattery,
     providerOffline: device.providerOffline,
+    reportInterval: device.reportInterval,
   });
 
   // Show readings even when offline (so users can see last known values)
@@ -270,12 +272,22 @@ function DeviceOverviewCard({
                   <h3 className="text-lg font-bold group-hover:text-primary">
                     {device.name}
                   </h3>
-                  {/* Status dot */}
+                  {/* Status dot - green: online, amber: overdue, red: confirmed offline */}
                   <span
                     className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${
-                      status.isOnline ? "bg-emerald-500" : "bg-red-500"
+                      status.isOnline
+                        ? "bg-emerald-500"
+                        : status.isReadingOverdue && !status.isProviderOffline && !status.isBatteryEmpty
+                          ? "bg-amber-500"
+                          : "bg-red-500"
                     }`}
-                    title={status.isOnline ? "Online" : "Offline"}
+                    title={
+                      status.isOnline
+                        ? "Online"
+                        : status.isReadingOverdue
+                          ? `No data for ${status.overdueMinutes ?? "?"} min`
+                          : "Offline"
+                    }
                   />
                   <Button
                     variant="ghost"
@@ -290,6 +302,15 @@ function DeviceOverviewCard({
                   >
                     <Settings className="h-4 w-4" />
                   </Button>
+                  {/* Offline warning badge - inline with gear icon */}
+                  {status.isReadingOverdue && (
+                    <Badge 
+                      variant="outline" 
+                      className="border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                    >
+                      Device offline for {status.overdueMinutes ?? "?"} minutes
+                    </Badge>
+                  )}
                 </div>
                 <p className="text-sm text-muted-foreground mt-0.5">
                   {device.model ?? "Qingping"}
