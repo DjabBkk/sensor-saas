@@ -101,5 +101,14 @@ export const updateDeviceSettings = async (
     throw new Error(`Qingping API error: ${response.status} - ${errorText}`);
   }
 
-  return response.json();
+  const text = await response.text();
+  if (!text || text.trim() === "") {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
 };
