@@ -5,7 +5,12 @@ import { v } from "convex/values";
 
 import { providerValidator } from "./lib/validators";
 import { internal } from "./_generated/api";
-import { getAccessToken, listDevices, updateDeviceSettings } from "./providers/qingping/client";
+import {
+  getAccessToken,
+  listDevices,
+  unbindDevice,
+  updateDeviceSettings,
+} from "./providers/qingping/client";
 import { mapQingpingDevice, mapQingpingReading } from "./providers/qingping/mappers";
 
 const normalizeTimestampMs = (ts: number) => (ts < 1e12 ? ts * 1000 : ts);
@@ -293,6 +298,61 @@ export const refreshExpiringTokens = internalAction({
   },
 });
 
+export const unbindQingpingDevice = internalAction({
+  args: {
+    accessToken: v.string(),
+    mac: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await unbindDevice(args.accessToken, args.mac);
+    console.log(`[QINGPING] Unbound device ${args.mac}`);
+    return null;
+  },
+});
+
+export const unbindQingpingDeviceForDeviceId = internalAction({
+  args: {
+    userId: v.id("users"),
+    mac: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const config = await ctx.runQuery(internal.providers.getConfig, {
+      userId: args.userId,
+      provider: "qingping",
+    });
+
+    if (!config?.accessToken) {
+      console.warn(`[QINGPING] No config found for user ${args.userId}, skipping unbind`);
+      return null;
+    }
+
+    let accessToken = config.accessToken;
+    const now = Date.now();
+    if (!config.tokenExpiresAt || config.tokenExpiresAt <= now + 5 * 60 * 1000) {
+      if (config.appKey && config.appSecret && config._id) {
+        const tokenResult = await getAccessToken(config.appKey, config.appSecret);
+        accessToken = tokenResult.accessToken;
+
+        await ctx.runMutation(internal.providers.updateToken, {
+          providerConfigId: config._id,
+          accessToken: tokenResult.accessToken,
+          tokenExpiresAt: tokenResult.tokenExpiresAt,
+        });
+      }
+    }
+
+    try {
+      await unbindDevice(accessToken, args.mac);
+      console.log(`[QINGPING] Successfully unbound device ${args.mac}`);
+    } catch (error) {
+      console.error(`[QINGPING] Failed to unbind device ${args.mac}:`, error);
+    }
+    return null;
+  },
+});
+
 /**
  * Update device report interval (how often the device sends data).
  * Minimum is 60 seconds (1 minute), maximum is 3600 seconds (1 hour).
@@ -405,9 +465,15 @@ export const updateDeviceReportInterval = action({
       }
 
       // Update device record with the new interval
+      // Set intervalChangeAt when interval changes to prevent retroactive ingestion
+      const intervalChangeAt = device.reportInterval !== args.reportIntervalSeconds 
+        ? Date.now() 
+        : undefined;
+      
       await ctx.runMutation(internal.devices.updateReportInterval, {
         deviceId: args.deviceId,
         reportInterval: args.reportIntervalSeconds,
+        intervalChangeAt,
       });
 
       const minutes = Math.round(args.reportIntervalSeconds / 60);
@@ -552,10 +618,18 @@ export const pollAllReadings = internalAction({
         });
         const reportIntervalSeconds = deviceRecord?.reportInterval ?? 3600;
         const reportIntervalMs = reportIntervalSeconds * 1000;
-        const lastReadingAt = deviceRecord?.lastReadingAt ?? 0;
+        // Use intervalChangeAt as minimum cutoff to prevent retroactive ingestion
+        const minAcceptedTs = deviceRecord?.intervalChangeAt
+          ? Math.max(deviceRecord.intervalChangeAt, deviceRecord?.lastReadingAt ?? 0)
+          : (deviceRecord?.lastReadingAt ?? 0);
         const readingTs = normalizeTimestampMs(reading.ts);
 
-        if (readingTs - lastReadingAt < reportIntervalMs * 0.9) {
+        // Skip readings older than the interval change timestamp
+        if (readingTs < minAcceptedTs) {
+          continue;
+        }
+        
+        if (readingTs - minAcceptedTs < reportIntervalMs * 0.9) {
           continue;
         }
 

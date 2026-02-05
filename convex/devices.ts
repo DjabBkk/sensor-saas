@@ -1,6 +1,7 @@
 import { internalMutation, internalQuery, query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
+import { internal } from "./_generated/api";
 import { providerValidator } from "./lib/validators";
 
 const deviceShape = v.object({
@@ -126,6 +127,14 @@ export const deleteDevice = mutation({
     const device = await ctx.db.get(args.deviceId);
     if (!device) {
       throw new Error("Device not found");
+    }
+
+    if (device.provider === "qingping") {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.providersActions.unbindQingpingDeviceForDeviceId,
+        { userId: device.userId, mac: device.providerDeviceId },
+      );
     }
 
     const existingDeleted = await ctx.db
@@ -377,6 +386,26 @@ export const isDeletedForUser = internalQuery({
   },
 });
 
+export const isDeletedByProviderDeviceId = internalQuery({
+  args: {
+    provider: providerValidator,
+    providerDeviceId: v.string(),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("deletedDevices")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("provider"), args.provider),
+          q.eq(q.field("providerDeviceId"), args.providerDeviceId),
+        ),
+      )
+      .first();
+    return Boolean(existing);
+  },
+});
+
 export const getInternal = internalQuery({
   args: {
     deviceId: v.id("devices"),
@@ -391,12 +420,22 @@ export const updateReportInterval = internalMutation({
   args: {
     deviceId: v.id("devices"),
     reportInterval: v.number(),
+    intervalChangeAt: v.optional(v.number()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.deviceId, {
+    const patch: {
+      reportInterval: number;
+      intervalChangeAt?: number;
+    } = {
       reportInterval: args.reportInterval,
-    });
+    };
+    
+    if (args.intervalChangeAt !== undefined) {
+      patch.intervalChangeAt = args.intervalChangeAt;
+    }
+    
+    await ctx.db.patch(args.deviceId, patch);
     return null;
   },
 });

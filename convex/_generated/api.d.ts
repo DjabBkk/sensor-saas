@@ -622,6 +622,15 @@ export declare const internal: {
         userId: Id<"users">;
       }
     >;
+    isDeletedByProviderDeviceId: FunctionReference<
+      "query",
+      "internal",
+      {
+        provider: "qingping" | "purpleair" | "iqair" | "temtop";
+        providerDeviceId: string;
+      },
+      boolean
+    >;
     isDeletedForUser: FunctionReference<
       "query",
       "internal",
@@ -635,7 +644,11 @@ export declare const internal: {
     updateReportInterval: FunctionReference<
       "mutation",
       "internal",
-      { deviceId: Id<"devices">; reportInterval: number },
+      {
+        deviceId: Id<"devices">;
+        intervalChangeAt?: number;
+        reportInterval: number;
+      },
       null
     >;
     upsertFromProvider: FunctionReference<
@@ -816,6 +829,18 @@ export declare const internal: {
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         userId: Id<"users">;
       },
+      null
+    >;
+    unbindQingpingDevice: FunctionReference<
+      "action",
+      "internal",
+      { accessToken: string; mac: string },
+      null
+    >;
+    unbindQingpingDeviceForDeviceId: FunctionReference<
+      "action",
+      "internal",
+      { mac: string; userId: Id<"users"> },
       null
     >;
   };

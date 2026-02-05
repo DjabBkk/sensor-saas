@@ -39,6 +39,19 @@ http.route({
     );
 
     if (!deviceInfo) {
+      const deletedDevice = await ctx.runQuery(
+        internal.devices.isDeletedByProviderDeviceId,
+        {
+          provider: "qingping",
+          providerDeviceId: mac,
+        },
+      );
+
+      if (deletedDevice) {
+        console.warn(`[WEBHOOK] Deleted device MAC: ${mac}`);
+        return new Response("Deleted device", { status: 200 });
+      }
+
       console.warn(`[WEBHOOK] Unknown device MAC: ${mac}`);
       return new Response("Unknown device", { status: 404 });
     }
@@ -75,7 +88,12 @@ http.route({
 
     const reportIntervalSeconds = device?.reportInterval ?? 3600;
     const reportIntervalMs = reportIntervalSeconds * 1000;
-    let lastAcceptedTs = device?.lastReadingAt ?? 0;
+    // Use intervalChangeAt as minimum cutoff to prevent retroactive ingestion
+    // Only accept readings newer than when the interval was last changed
+    const minAcceptedTs = device?.intervalChangeAt 
+      ? Math.max(device.intervalChangeAt, device?.lastReadingAt ?? 0)
+      : (device?.lastReadingAt ?? 0);
+    let lastAcceptedTs = minAcceptedTs;
 
     // Process readings for this device
     let processedCount = 0;
@@ -86,6 +104,12 @@ http.route({
       }
 
       const readingTs = normalizeTimestampMs(reading.ts);
+      
+      // Skip readings older than the interval change timestamp
+      if (readingTs < minAcceptedTs) {
+        continue;
+      }
+      
       if (readingTs - lastAcceptedTs < reportIntervalMs * 0.9) {
         continue;
       }

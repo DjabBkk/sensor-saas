@@ -112,3 +112,30 @@ export const updateDeviceSettings = async (
     return null;
   }
 };
+
+export const unbindDevice = async (accessToken: string, mac: string) => {
+  const response = await fetch(`${QINGPING_API_BASE}/v1/apis/devices`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ mac: [mac], timestamp: Date.now() }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Qingping API error: ${response.status} - ${errorText}`);
+  }
+
+  const text = await response.text();
+  if (!text || text.trim() === "") {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+};
