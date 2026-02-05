@@ -217,16 +217,25 @@ export const syncDevicesForUser = internalAction({
             pressure: reading.pressure,
             battery: reading.battery,
           });
-          console.log(
-            "[syncDevicesForUser] ingested reading",
-            readingId,
-            "for device",
-            deviceInfo._id,
-            "pm25:",
-            reading.pm25,
-            "co2:",
-            reading.co2
-          );
+          if (readingId) {
+            console.log(
+              "[syncDevicesForUser] ingested reading",
+              readingId,
+              "for device",
+              deviceInfo._id,
+              "pm25:",
+              reading.pm25,
+              "co2:",
+              reading.co2
+            );
+          } else {
+            console.log(
+              "[syncDevicesForUser] skipped historical reading for device",
+              deviceInfo._id,
+              "ts:",
+              reading.ts
+            );
+          }
         } else {
           console.warn(
             "[syncDevicesForUser] device not found in DB:",
@@ -415,6 +424,86 @@ export const updateDeviceReportInterval = action({
   },
 });
 
+/**
+ * Set default report interval (1 hour) for a newly onboarded device.
+ * Called automatically after device sync completes.
+ */
+export const setDefaultReportInterval = internalAction({
+  args: {
+    userId: v.id("users"),
+    deviceId: v.id("devices"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const DEFAULT_INTERVAL_SECONDS = 3600; // 1 hour
+
+    // Get device info
+    const device = await ctx.runQuery(internal.devices.getInternal, {
+      deviceId: args.deviceId,
+    });
+
+    if (!device) {
+      console.warn(`[SET DEFAULT INTERVAL] Device ${args.deviceId} not found`);
+      return null;
+    }
+
+    if (device.provider !== "qingping") {
+      console.log(`[SET DEFAULT INTERVAL] Skipping non-Qingping device ${args.deviceId}`);
+      return null;
+    }
+
+    // Get provider config for access token
+    const config = await ctx.runQuery(internal.providers.getConfig, {
+      userId: args.userId,
+      provider: "qingping",
+    });
+
+    if (!config?.accessToken) {
+      console.warn(`[SET DEFAULT INTERVAL] No credentials found for user ${args.userId}`);
+      return null;
+    }
+
+    // Check if token needs refresh
+    let accessToken = config.accessToken;
+    const now = Date.now();
+    if (!config.tokenExpiresAt || config.tokenExpiresAt <= now + 5 * 60 * 1000) {
+      if (!config.appKey || !config.appSecret || !config._id) {
+        console.warn(`[SET DEFAULT INTERVAL] Token expired and cannot be refreshed`);
+        return null;
+      }
+      
+      const tokenResult = await getAccessToken(config.appKey, config.appSecret);
+      accessToken = tokenResult.accessToken;
+      
+      await ctx.runMutation(internal.providers.updateToken, {
+        providerConfigId: config._id,
+        accessToken: tokenResult.accessToken,
+        tokenExpiresAt: tokenResult.tokenExpiresAt,
+      });
+    }
+
+    // Set default interval via Qingping API
+    const collectInterval = 60; // 1 minute
+    
+    try {
+      await updateDeviceSettings(accessToken, {
+        mac: [device.providerDeviceId],
+        report_interval: DEFAULT_INTERVAL_SECONDS,
+        collect_interval: collectInterval,
+        timestamp: Date.now(),
+      });
+
+      console.log(
+        `[SET DEFAULT INTERVAL] Set report interval for device ${device.providerDeviceId} to ${DEFAULT_INTERVAL_SECONDS}s (1 hour)`
+      );
+    } catch (error) {
+      console.error(`[SET DEFAULT INTERVAL] Failed to set default interval for device ${device.providerDeviceId}:`, error);
+    }
+
+    return null;
+  },
+});
+
 export const pollAllReadings = internalAction({
   args: {},
   returns: v.null(),
@@ -533,7 +622,7 @@ export const pollAllReadings = internalAction({
           continue;
         }
 
-        await ctx.runMutation(internal.readings.ingest, {
+        const readingId = await ctx.runMutation(internal.readings.ingest, {
           deviceId: deviceInfo._id,
           ts: reading.ts,
           pm25: reading.pm25,
@@ -546,8 +635,10 @@ export const pollAllReadings = internalAction({
           battery: reading.battery,
         });
         
-        totalDevicesProcessed++;
-        totalReadingsProcessed++;
+        if (readingId) {
+          totalDevicesProcessed++;
+          totalReadingsProcessed++;
+        }
       }
 
       // Update last sync time

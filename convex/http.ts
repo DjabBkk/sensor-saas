@@ -155,7 +155,7 @@ http.route({
             continue;
           }
 
-          await ctx.runMutation(internal.readings.ingest, {
+          const readingId = await ctx.runMutation(internal.readings.ingest, {
             deviceId: deviceInfo._id,
             ts: reading.ts,
             pm25: reading.pm25,
@@ -167,7 +167,9 @@ http.route({
             pressure: reading.pressure,
             battery: reading.battery,
           });
-          processedCount++;
+          if (readingId) {
+            processedCount++;
+          }
         } catch (error) {
           console.error(`[WEBHOOK] Error ingesting reading for device ${mac}:`, error);
           errors++;

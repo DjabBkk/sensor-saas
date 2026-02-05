@@ -418,6 +418,13 @@ export const addByMac = mutation({
         provider: args.provider,
       });
       console.log(`[ADD DEVICE] Scheduled immediate sync for user ${args.userId} after adding device ${deviceId}`);
+      
+      // Schedule setting default report interval (1 hour) after sync completes
+      await ctx.scheduler.runAfter(5000, internal.providersActions.setDefaultReportInterval, {
+        userId: args.userId,
+        deviceId: deviceId,
+      });
+      console.log(`[ADD DEVICE] Scheduled setting default report interval for device ${deviceId}`);
     } else {
       // No credentials yet - this might be a first-time user where connectAndSync is still running
       // Schedule a delayed sync to catch cases where credentials are saved shortly after
@@ -426,6 +433,13 @@ export const addByMac = mutation({
         userId: args.userId,
         provider: args.provider,
       });
+      
+      // Schedule setting default report interval (1 hour) after sync completes
+      await ctx.scheduler.runAfter(8000, internal.providersActions.setDefaultReportInterval, {
+        userId: args.userId,
+        deviceId: deviceId,
+      });
+      console.log(`[ADD DEVICE] Scheduled setting default report interval for device ${deviceId}`);
     }
 
     return deviceId;

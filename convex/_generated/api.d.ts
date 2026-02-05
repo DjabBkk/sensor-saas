@@ -752,6 +752,12 @@ export declare const internal: {
     >;
     pollAllReadings: FunctionReference<"action", "internal", {}, null>;
     refreshExpiringTokens: FunctionReference<"action", "internal", {}, null>;
+    setDefaultReportInterval: FunctionReference<
+      "action",
+      "internal",
+      { deviceId: Id<"devices">; userId: Id<"users"> },
+      null
+    >;
     syncDevicesForUser: FunctionReference<
       "action",
       "internal",
@@ -779,7 +785,7 @@ export declare const internal: {
         ts: number;
         voc?: number;
       },
-      Id<"readings">
+      Id<"readings"> | null
     >;
   };
   users: {

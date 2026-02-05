@@ -29,7 +29,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { Plus, ChevronRight, Settings } from "lucide-react";
+import { Plus, ChevronRight, Settings, Loader2 } from "lucide-react";
 import { useAddDeviceDialog } from "./_components/add-device-context";
 
 export default function DashboardPage() {
@@ -161,6 +161,7 @@ function DeviceOverviewCard({
     lastBattery?: number;
     providerOffline?: boolean;
     dashboardMetrics?: string[];
+    createdAt: number;
   };
 }) {
   const reading = useQuery(api.readings.latest, { deviceId: device._id });
@@ -175,6 +176,8 @@ function DeviceOverviewCard({
 
   // Show readings even when offline (so users can see last known values)
   const displayReading = reading;
+  const isNewlyAdded =
+    !displayReading && Date.now() - device.createdAt < 2 * 60 * 1000;
   const metricConfig = {
     pm25: {
       label: "PM2.5",
@@ -369,6 +372,11 @@ function DeviceOverviewCard({
                     />
                   );
                 })}
+              </div>
+            ) : isNewlyAdded ? (
+              <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Fetching initial data...</span>
               </div>
             ) : (
               <div className="py-4 text-sm text-muted-foreground">

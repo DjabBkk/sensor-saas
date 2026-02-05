@@ -71,9 +71,19 @@ export const ingest = internalMutation({
     battery: v.optional(v.number()),
     aqi: v.optional(v.number()),
   },
-  returns: v.id("readings"),
+  returns: v.union(v.id("readings"), v.null()),
   handler: async (ctx, args) => {
     const normalizedTs = normalizeTimestampMs(args.ts);
+    const device = await ctx.db.get(args.deviceId);
+    if (!device) {
+      console.warn("[INGEST] Device not found:", args.deviceId);
+      return null;
+    }
+
+    if (normalizedTs < device.createdAt) {
+      return null;
+    }
+
     const readingId = await ctx.db.insert("readings", {
       deviceId: args.deviceId,
       ts: normalizedTs,
@@ -99,7 +109,9 @@ export const ingest = internalMutation({
       devicePatch.lastBattery = args.battery;
     }
 
-    await ctx.db.patch(args.deviceId, devicePatch);
+    if (!device.lastReadingAt || normalizedTs > device.lastReadingAt) {
+      await ctx.db.patch(args.deviceId, devicePatch);
+    }
 
     return readingId;
   },
