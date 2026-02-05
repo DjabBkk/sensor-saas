@@ -33,6 +33,8 @@ export default defineSchema({
     providerOffline: v.optional(v.boolean()),
     hiddenMetrics: v.optional(v.array(v.string())),
     dashboardMetrics: v.optional(v.array(v.string())),
+    primaryMetrics: v.optional(v.array(v.string())),   // max 2 - hero gauges
+    secondaryMetrics: v.optional(v.array(v.string())), // max 6 - compact rows
     intervalChangeAt: v.optional(v.number()),
     awaitingPostChangeReading: v.optional(v.boolean()),
     reportInterval: v.optional(v.number()),

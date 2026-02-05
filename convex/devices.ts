@@ -19,6 +19,8 @@ const deviceShape = v.object({
   providerOffline: v.optional(v.boolean()),
   hiddenMetrics: v.optional(v.array(v.string())),
   dashboardMetrics: v.optional(v.array(v.string())),
+  primaryMetrics: v.optional(v.array(v.string())),
+  secondaryMetrics: v.optional(v.array(v.string())),
   intervalChangeAt: v.optional(v.number()),
   awaitingPostChangeReading: v.optional(v.boolean()),
   reportInterval: v.optional(v.number()),
@@ -103,17 +105,24 @@ export const updateHiddenMetrics = mutation({
 export const updateDashboardMetrics = mutation({
   args: {
     deviceId: v.id("devices"),
-    dashboardMetrics: v.array(v.string()),
+    primaryMetrics: v.array(v.string()),
+    secondaryMetrics: v.array(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    if (args.dashboardMetrics.length === 0) {
-      throw new Error("At least one dashboard metric must be selected.");
+    if (args.primaryMetrics.length === 0) {
+      throw new Error("At least one primary metric must be selected.");
     }
-    if (args.dashboardMetrics.length > 4) {
-      throw new Error("You can select up to 4 dashboard metrics.");
+    if (args.primaryMetrics.length > 2) {
+      throw new Error("You can select up to 2 primary metrics.");
     }
-    await ctx.db.patch(args.deviceId, { dashboardMetrics: args.dashboardMetrics });
+    if (args.secondaryMetrics.length > 6) {
+      throw new Error("You can select up to 6 secondary metrics.");
+    }
+    await ctx.db.patch(args.deviceId, { 
+      primaryMetrics: args.primaryMetrics,
+      secondaryMetrics: args.secondaryMetrics,
+    });
     return null;
   },
 });

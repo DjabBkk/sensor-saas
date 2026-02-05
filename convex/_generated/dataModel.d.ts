@@ -72,11 +72,13 @@ export type DataModel = {
       lastReadingAt?: number;
       model?: string;
       name: string;
+      primaryMetrics?: Array<string>;
       provider: "qingping" | "purpleair" | "iqair" | "temtop";
       providerDeviceId: string;
       providerOffline?: boolean;
       reportInterval?: number;
       roomId?: Id<"rooms">;
+      secondaryMetrics?: Array<string>;
       timezone?: string;
       userId: Id<"users">;
       _id: Id<"devices">;
@@ -94,11 +96,13 @@ export type DataModel = {
       | "lastReadingAt"
       | "model"
       | "name"
+      | "primaryMetrics"
       | "provider"
       | "providerDeviceId"
       | "providerOffline"
       | "reportInterval"
       | "roomId"
+      | "secondaryMetrics"
       | "timezone"
       | "userId";
     indexes: {

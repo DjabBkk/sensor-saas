@@ -21,6 +21,7 @@ import {
   getTVOCLevel,
 } from "@/lib/aqi-levels";
 import { RadialGaugeInline } from "@/components/ui/radial-gauge";
+import { SecondaryMetricItem, type MetricKey } from "@/components/ui/secondary-metric";
 import { Plus, Settings } from "lucide-react";
 import { useAddDeviceDialog } from "./_components/add-device-context";
 import { DeviceSettingsDialog } from "@/app/dashboard/_components/DeviceSettingsDialog";
@@ -100,7 +101,7 @@ export default function DashboardPage() {
 
       {/* Device Grid */}
       {devices && devices.length > 0 && (
-        <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-6 grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {devices.map((device) => (
             <DeviceOverviewCard
               key={device._id}
@@ -128,6 +129,8 @@ function DeviceOverviewCard({
     lastBattery?: number;
     providerOffline?: boolean;
     dashboardMetrics?: string[];
+    primaryMetrics?: string[];
+    secondaryMetrics?: string[];
     hiddenMetrics?: string[];
     reportInterval?: number;
   };
@@ -217,28 +220,49 @@ function DeviceOverviewCard({
     );
   }, [reading]);
 
-  const defaultDashboardMetrics = useMemo(
-    () => availableMetrics.map((metric) => metric.key).slice(0, 4),
+  const availableMetricKeys = availableMetrics.map((metric) => metric.key);
+
+  // Default primary metrics: first 2 available
+  const defaultPrimaryMetrics = useMemo(
+    () => availableMetrics.map((metric) => metric.key).slice(0, 2),
     [availableMetrics]
   );
 
-  const availableMetricKeys = availableMetrics.map((metric) => metric.key);
-  const dashboardSelection =
-    device.dashboardMetrics && device.dashboardMetrics.length > 0
-      ? device.dashboardMetrics
-      : defaultDashboardMetrics;
-  const selectedMetrics = dashboardSelection
+  // Default secondary metrics: next 4 available (after primary)
+  const defaultSecondaryMetrics = useMemo(
+    () => availableMetrics.map((metric) => metric.key).slice(2, 6),
+    [availableMetrics]
+  );
+
+  // Use stored metrics or fall back to defaults
+  const primarySelection =
+    device.primaryMetrics && device.primaryMetrics.length > 0
+      ? device.primaryMetrics
+      : defaultPrimaryMetrics;
+  
+  const secondarySelection =
+    device.secondaryMetrics && device.secondaryMetrics.length > 0
+      ? device.secondaryMetrics
+      : defaultSecondaryMetrics;
+
+  // Filter to only available metrics
+  const selectedPrimaryMetrics = primarySelection
     .filter((key) => availableMetricKeys.includes(key))
     .filter((key) => key in metricConfig)
-    .slice(0, 4);
+    .slice(0, 2);
+
+  const selectedSecondaryMetrics = secondarySelection
+    .filter((key) => availableMetricKeys.includes(key))
+    .filter((key) => key in metricConfig)
+    .slice(0, 6);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
     <>
       <Link href={`/dashboard/device/${device._id}`}>
-        <Card className="group relative overflow-hidden transition-all hover:shadow-lg w-full">
-          <CardContent className="pl-6 pr-8 pt-5 pb-5">
+        <Card className="group relative overflow-hidden transition-all hover:shadow-lg w-full min-w-[320px]">
+          <CardContent className="px-5 pt-5 pb-5">
             {/* Top: Device name, model, and status */}
             <div className="flex items-start justify-between mb-4">
               <div className="flex-1 min-w-0">
@@ -273,21 +297,47 @@ function DeviceOverviewCard({
               </div>
             </div>
 
-            {/* Bottom: Radial gauges - always inline */}
+            {/* Primary metrics: Hero radial gauges */}
             {displayReading ? (
-              <div className="flex items-center justify-start gap-6">
-                {selectedMetrics.map((key) => {
-                  const metric = metricConfig[key as keyof typeof metricConfig];
-                  return (
-                    <RadialGaugeInline
-                      key={key}
-                      label={metric.label}
-                      value={metric.value}
-                      unit={metric.unit}
-                      level={metric.level}
-                    />
-                  );
-                })}
+              <div className="space-y-4">
+                {/* Hero gauges - up to 2, left-aligned */}
+                {selectedPrimaryMetrics.length > 0 && (
+                  <div className="flex gap-6">
+                    {selectedPrimaryMetrics.map((key) => {
+                      const metric = metricConfig[key as keyof typeof metricConfig];
+                      return (
+                        <RadialGaugeInline
+                          key={key}
+                          label={metric.label}
+                          value={metric.value}
+                          unit={metric.unit}
+                          level={metric.level}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Secondary metrics: Compact list with icons */}
+                {selectedSecondaryMetrics.length > 0 && (
+                  <div className="border-t border-border/40 pt-3 mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-0.5">
+                      {selectedSecondaryMetrics.map((key) => {
+                        const metric = metricConfig[key as keyof typeof metricConfig];
+                        return (
+                          <SecondaryMetricItem
+                            key={key}
+                            metricKey={key as MetricKey}
+                            label={metric.label}
+                            value={metric.value}
+                            unit={metric.unit}
+                            level={metric.level}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="py-4 text-sm text-muted-foreground">
@@ -306,7 +356,8 @@ function DeviceOverviewCard({
         hiddenMetrics={device.hiddenMetrics}
         availableMetrics={availableMetricKeys}
         reportInterval={device.reportInterval}
-        dashboardMetrics={dashboardSelection}
+        primaryMetrics={primarySelection}
+        secondaryMetrics={secondarySelection}
         dashboardMetricOptions={availableMetrics.map((metric) => ({
           key: metric.key,
           label: metric.label,

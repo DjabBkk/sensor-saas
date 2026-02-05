@@ -63,11 +63,13 @@ export declare const api: {
         lastReadingAt?: number;
         model?: string;
         name: string;
+        primaryMetrics?: Array<string>;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         providerDeviceId: string;
         providerOffline?: boolean;
         reportInterval?: number;
         roomId?: Id<"rooms">;
+        secondaryMetrics?: Array<string>;
         timezone?: string;
         userId: Id<"users">;
       }
@@ -94,11 +96,13 @@ export declare const api: {
         lastReadingAt?: number;
         model?: string;
         name: string;
+        primaryMetrics?: Array<string>;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         providerDeviceId: string;
         providerOffline?: boolean;
         reportInterval?: number;
         roomId?: Id<"rooms">;
+        secondaryMetrics?: Array<string>;
         timezone?: string;
         userId: Id<"users">;
       }>
@@ -112,7 +116,11 @@ export declare const api: {
     updateDashboardMetrics: FunctionReference<
       "mutation",
       "public",
-      { dashboardMetrics: Array<string>; deviceId: Id<"devices"> },
+      {
+        deviceId: Id<"devices">;
+        primaryMetrics: Array<string>;
+        secondaryMetrics: Array<string>;
+      },
       null
     >;
     updateHiddenMetrics: FunctionReference<
@@ -613,11 +621,13 @@ export declare const internal: {
         lastReadingAt?: number;
         model?: string;
         name: string;
+        primaryMetrics?: Array<string>;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         providerDeviceId: string;
         providerOffline?: boolean;
         reportInterval?: number;
         roomId?: Id<"rooms">;
+        secondaryMetrics?: Array<string>;
         timezone?: string;
         userId: Id<"users">;
       }

@@ -36,7 +36,8 @@ type DeviceSettingsDialogProps = {
   hiddenMetrics?: string[];
   availableMetrics?: string[];
   reportInterval?: number;
-  dashboardMetrics?: string[];
+  primaryMetrics?: string[];
+  secondaryMetrics?: string[];
   dashboardMetricOptions?: { key: string; label: string }[];
   trigger: React.ReactNode;
   /** Hide profile-specific sections (Visible Metrics) when opened from dashboard */
@@ -71,7 +72,8 @@ export function DeviceSettingsDialog({
   hiddenMetrics,
   availableMetrics,
   reportInterval,
-  dashboardMetrics,
+  primaryMetrics,
+  secondaryMetrics,
   dashboardMetricOptions,
   trigger,
   hideProfileMetrics = false,
@@ -112,8 +114,9 @@ export function DeviceSettingsDialog({
   const [intervalError, setIntervalError] = useState<string | null>(null);
   const [intervalSuccess, setIntervalSuccess] = useState<string | null>(null);
 
-  const [dashboardSelection, setDashboardSelection] = useState<string[]>([]);
-  const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [primarySelection, setPrimarySelection] = useState<string[]>([]);
+  const [secondarySelection, setSecondarySelection] = useState<string[]>([]);
+  const [metricsSelectionError, setMetricsSelectionError] = useState<string | null>(null);
 
   const availableMetricSet = useMemo(
     () => new Set(availableMetrics ?? METRIC_OPTIONS.map((metric) => metric.key)),
@@ -143,55 +146,113 @@ export function DeviceSettingsDialog({
       setRenameError(null);
       setIntervalError(null);
       setIntervalSuccess(null);
+      setMetricsSelectionError(null);
+      
       if (dashboardMetricOptions && dashboardMetricOptions.length > 0) {
-        const defaultDashboardMetrics = dashboardMetricOptions
-          .map((metric) => metric.key)
-          .slice(0, 4);
-        setDashboardSelection(
-          dashboardMetrics && dashboardMetrics.length > 0
-            ? dashboardMetrics
-            : defaultDashboardMetrics
+        const allKeys = dashboardMetricOptions.map((m) => m.key);
+        // Default primary: first 2 available
+        const defaultPrimary = allKeys.slice(0, 2);
+        // Default secondary: next 4 available
+        const defaultSecondary = allKeys.slice(2, 6);
+        
+        setPrimarySelection(
+          primaryMetrics && primaryMetrics.length > 0
+            ? primaryMetrics
+            : defaultPrimary
         );
-        setDashboardError(null);
+        setSecondarySelection(
+          secondaryMetrics && secondaryMetrics.length > 0
+            ? secondaryMetrics
+            : defaultSecondary
+        );
       }
     }
   }, [
     deviceName,
     hiddenMetrics,
     reportInterval,
-    dashboardMetrics,
+    primaryMetrics,
+    secondaryMetrics,
     dashboardMetricOptions,
     open,
   ]);
 
-  const handleToggleDashboardMetric = async (metricKey: string) => {
-    setDashboardError(null);
-    const isSelected = dashboardSelection.includes(metricKey);
-    if (!isSelected && dashboardSelection.length >= 4) {
-      setDashboardError("You can show up to 4 metrics.");
-      return;
-    }
-    if (isSelected && dashboardSelection.length <= 1) {
-      setDashboardError("Select at least 1 metric.");
-      return;
-    }
-    const newSelection = isSelected 
-      ? dashboardSelection.filter((key) => key !== metricKey) 
-      : [...dashboardSelection, metricKey];
+  const handleTogglePrimaryMetric = async (metricKey: string) => {
+    setMetricsSelectionError(null);
+    const isSelected = primarySelection.includes(metricKey);
     
-    setDashboardSelection(newSelection);
+    if (!isSelected && primarySelection.length >= 2) {
+      setMetricsSelectionError("You can select up to 2 primary metrics.");
+      return;
+    }
+    if (isSelected && primarySelection.length <= 1) {
+      setMetricsSelectionError("Select at least 1 primary metric.");
+      return;
+    }
+    
+    const newPrimary = isSelected
+      ? primarySelection.filter((key) => key !== metricKey)
+      : [...primarySelection, metricKey];
+    
+    // If adding to primary, remove from secondary
+    const newSecondary = isSelected
+      ? secondarySelection
+      : secondarySelection.filter((key) => key !== metricKey);
+    
+    setPrimarySelection(newPrimary);
+    setSecondarySelection(newSecondary);
     
     // Auto-save immediately
     try {
       await updateDashboardMetrics({
         deviceId,
-        dashboardMetrics: newSelection,
+        primaryMetrics: newPrimary,
+        secondaryMetrics: newSecondary,
       });
     } catch (err) {
       // Revert on error
-      setDashboardSelection(dashboardSelection);
-      setDashboardError(
-        err instanceof Error ? err.message : "Failed to update dashboard metrics"
+      setPrimarySelection(primarySelection);
+      setSecondarySelection(secondarySelection);
+      setMetricsSelectionError(
+        err instanceof Error ? err.message : "Failed to update metrics"
+      );
+    }
+  };
+
+  const handleToggleSecondaryMetric = async (metricKey: string) => {
+    setMetricsSelectionError(null);
+    const isSelected = secondarySelection.includes(metricKey);
+    
+    if (!isSelected && secondarySelection.length >= 6) {
+      setMetricsSelectionError("You can select up to 6 secondary metrics.");
+      return;
+    }
+    
+    const newSecondary = isSelected
+      ? secondarySelection.filter((key) => key !== metricKey)
+      : [...secondarySelection, metricKey];
+    
+    // If adding to secondary, remove from primary
+    const newPrimary = isSelected
+      ? primarySelection
+      : primarySelection.filter((key) => key !== metricKey);
+    
+    setPrimarySelection(newPrimary);
+    setSecondarySelection(newSecondary);
+    
+    // Auto-save immediately
+    try {
+      await updateDashboardMetrics({
+        deviceId,
+        primaryMetrics: newPrimary,
+        secondaryMetrics: newSecondary,
+      });
+    } catch (err) {
+      // Revert on error
+      setPrimarySelection(primarySelection);
+      setSecondarySelection(secondarySelection);
+      setMetricsSelectionError(
+        err instanceof Error ? err.message : "Failed to update metrics"
       );
     }
   };
@@ -299,41 +360,75 @@ export function DeviceSettingsDialog({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-6 py-2">
+          <div className="space-y-6 py-2 max-h-[70vh] overflow-y-auto">
             {dashboardMetricOptions && dashboardMetricOptions.length > 0 && (
-              <div className="space-y-3">
-                <div>
-                  <h4 className="text-sm font-medium">Dashboard Metrics</h4>
+              <>
+                {/* Primary Metrics Section */}
+                <div className="space-y-3">
+                  <div>
+                    <h4 className="text-sm font-medium">Primary Metrics</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Select up to 2 metrics shown as large gauges.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    {dashboardMetricOptions.map((metric) => (
+                      <div
+                        key={`primary-${metric.key}`}
+                        className="flex items-center justify-between rounded-lg border px-3 py-2"
+                      >
+                        <Label htmlFor={`primary-${metric.key}`} className="text-sm">
+                          {metric.label}
+                        </Label>
+                        <Switch
+                          id={`primary-${metric.key}`}
+                          checked={primarySelection.includes(metric.key)}
+                          onCheckedChange={() => handleTogglePrimaryMetric(metric.key)}
+                        />
+                      </div>
+                    ))}
+                  </div>
                   <p className="text-xs text-muted-foreground">
-                    Choose up to 4 metrics for the dashboard card.
+                    {primarySelection.length}/2 selected
                   </p>
                 </div>
+
+                {/* Secondary Metrics Section */}
                 <div className="space-y-3">
-                  {dashboardMetricOptions.map((metric) => (
-                    <div
-                      key={`dashboard-${metric.key}`}
-                      className="flex items-center justify-between rounded-lg border px-3 py-2"
-                    >
-                      <Label htmlFor={`dashboard-${metric.key}`} className="text-sm">
-                        {metric.label}
-                      </Label>
-                      <Switch
-                        id={`dashboard-${metric.key}`}
-                        checked={dashboardSelection.includes(metric.key)}
-                        onCheckedChange={() => handleToggleDashboardMetric(metric.key)}
-                      />
-                    </div>
-                  ))}
-                  {dashboardMetricOptions.length === 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      No metrics available yet.
+                  <div>
+                    <h4 className="text-sm font-medium">Secondary Metrics</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Select up to 6 metrics shown as compact rows below.
                     </p>
-                  )}
+                  </div>
+                  <div className="space-y-2">
+                    {dashboardMetricOptions
+                      .filter((metric) => !primarySelection.includes(metric.key))
+                      .map((metric) => (
+                        <div
+                          key={`secondary-${metric.key}`}
+                          className="flex items-center justify-between rounded-lg border px-3 py-2"
+                        >
+                          <Label htmlFor={`secondary-${metric.key}`} className="text-sm">
+                            {metric.label}
+                          </Label>
+                          <Switch
+                            id={`secondary-${metric.key}`}
+                            checked={secondarySelection.includes(metric.key)}
+                            onCheckedChange={() => handleToggleSecondaryMetric(metric.key)}
+                          />
+                        </div>
+                      ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {secondarySelection.length}/6 selected
+                  </p>
                 </div>
-                {dashboardError && (
-                  <p className="text-sm text-destructive">{dashboardError}</p>
+
+                {metricsSelectionError && (
+                  <p className="text-sm text-destructive">{metricsSelectionError}</p>
                 )}
-              </div>
+              </>
             )}
 
             {!hideProfileMetrics && (
