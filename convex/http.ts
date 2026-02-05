@@ -2,12 +2,8 @@ import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 
 import { internal } from "./_generated/api";
-import {
-  extractReadingsFromWebhook,
-  verifyQingpingSignature,
-} from "./providers/qingping/webhooks";
-import { mapQingpingReading } from "./providers/qingping/mappers";
-import type { QingpingWebhookBody } from "./providers/types";
+import * as qingping from "./providers/qingping";
+import type { QingpingWebhookBody } from "./providers/qingping/types";
 
 const http = httpRouter();
 const normalizeTimestampMs = (ts: number) => (ts < 1e12 ? ts * 1000 : ts);
@@ -20,7 +16,7 @@ http.route({
     const body = (await req.json()) as QingpingWebhookBody;
 
     // Extract device MAC address from webhook payload first
-    const { mac, readings } = extractReadingsFromWebhook(body);
+    const { mac, readings } = qingping.extractReadingsFromWebhook(body);
     
     if (!mac) {
       console.error("[WEBHOOK] Missing device MAC address");
@@ -57,7 +53,7 @@ http.route({
     }
 
     // Verify signature using the device owner's App Secret
-    const isValid = await verifyQingpingSignature(
+    const isValid = await qingping.verifyQingpingSignature(
       body.signature.timestamp,
       body.signature.token,
       body.signature.signature,
@@ -85,7 +81,7 @@ http.route({
     // Process readings for this device
     let processedCount = 0;
     for (const data of readings) {
-      const reading = mapQingpingReading(data);
+      const reading = qingping.mapQingpingReading(data);
       if (!reading) {
         continue;
       }

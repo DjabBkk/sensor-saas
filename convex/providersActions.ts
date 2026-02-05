@@ -5,13 +5,7 @@ import { v } from "convex/values";
 
 import { providerValidator } from "./lib/validators";
 import { internal } from "./_generated/api";
-import {
-  getAccessToken,
-  listDevices,
-  unbindDevice,
-  updateDeviceSettings,
-} from "./providers/qingping/client";
-import { mapQingpingDevice, mapQingpingReading } from "./providers/qingping/mappers";
+import * as qingping from "./providers/qingping";
 
 const normalizeTimestampMs = (ts: number) => (ts < 1e12 ? ts * 1000 : ts);
 
@@ -25,7 +19,7 @@ export const fetchAccessToken = internalAction({
     tokenExpiresAt: v.number(),
   }),
   handler: async (ctx, args) => {
-    return await getAccessToken(args.appKey, args.appSecret);
+    return await qingping.getAccessToken(args.appKey, args.appSecret);
   },
 });
 
@@ -44,7 +38,7 @@ export const connectAndSync = internalAction({
     }
 
     // Get access token
-    const tokenResult = await getAccessToken(args.appKey, args.appSecret);
+    const tokenResult = await qingping.getAccessToken(args.appKey, args.appSecret);
 
     // Get existing config
     const existing = await ctx.runQuery(internal.providers.getConfig, {
@@ -118,7 +112,7 @@ export const syncDevicesForUser = internalAction({
       }
       
       console.log("[syncDevicesForUser] Token expired, refreshing...");
-      const tokenResult = await getAccessToken(config.appKey, config.appSecret);
+      const tokenResult = await qingping.getAccessToken(config.appKey, config.appSecret);
       accessToken = tokenResult.accessToken;
       
       // Update the token in the database
@@ -131,12 +125,12 @@ export const syncDevicesForUser = internalAction({
 
     let devices;
     try {
-      devices = await listDevices(accessToken);
+      devices = await qingping.listDevices(accessToken);
     } catch (error: any) {
       // If we get a 401, try refreshing the token once more
       if (error?.message?.includes("401") && config.appKey && config.appSecret && config._id) {
         console.log("[syncDevicesForUser] Got 401, refreshing token and retrying...");
-        const tokenResult = await getAccessToken(config.appKey, config.appSecret);
+        const tokenResult = await qingping.getAccessToken(config.appKey, config.appSecret);
         accessToken = tokenResult.accessToken;
         
         await ctx.runMutation(internal.providers.updateToken, {
@@ -146,7 +140,7 @@ export const syncDevicesForUser = internalAction({
         });
         
         // Retry once
-        devices = await listDevices(accessToken);
+        devices = await qingping.listDevices(accessToken);
       } else {
         throw error;
       }
@@ -159,7 +153,7 @@ export const syncDevicesForUser = internalAction({
     );
 
     for (const device of devices) {
-      const normalized = mapQingpingDevice(device);
+      const normalized = qingping.mapQingpingDevice(device);
       const isDeleted: boolean = await ctx.runQuery(
         internal.devices.isDeletedForUser,
         {
@@ -182,7 +176,7 @@ export const syncDevicesForUser = internalAction({
         providerOffline: device.status?.offline ?? false,
       });
 
-      const reading = mapQingpingReading(device.data);
+      const reading = qingping.mapQingpingReading(device.data);
       if (reading) {
         console.log(
           "[syncDevicesForUser] device",
@@ -286,7 +280,7 @@ export const refreshExpiringTokens = internalAction({
         continue;
       }
 
-      const token = await getAccessToken(config.appKey, config.appSecret);
+      const token = await qingping.getAccessToken(config.appKey, config.appSecret);
       await ctx.runMutation(internal.providers.updateToken, {
         providerConfigId: config._id,
         accessToken: token.accessToken,
@@ -305,7 +299,7 @@ export const unbindQingpingDevice = internalAction({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await unbindDevice(args.accessToken, args.mac);
+    await qingping.unbindDevice(args.accessToken, args.mac);
     console.log(`[QINGPING] Unbound device ${args.mac}`);
     return null;
   },
@@ -332,7 +326,7 @@ export const unbindQingpingDeviceForDeviceId = internalAction({
     const now = Date.now();
     if (!config.tokenExpiresAt || config.tokenExpiresAt <= now + 5 * 60 * 1000) {
       if (config.appKey && config.appSecret && config._id) {
-        const tokenResult = await getAccessToken(config.appKey, config.appSecret);
+        const tokenResult = await qingping.getAccessToken(config.appKey, config.appSecret);
         accessToken = tokenResult.accessToken;
 
         await ctx.runMutation(internal.providers.updateToken, {
@@ -344,7 +338,7 @@ export const unbindQingpingDeviceForDeviceId = internalAction({
     }
 
     try {
-      await unbindDevice(accessToken, args.mac);
+      await qingping.unbindDevice(accessToken, args.mac);
       console.log(`[QINGPING] Successfully unbound device ${args.mac}`);
       // Note: We do NOT remove the deletedDevices entry here.
       // It will be removed when the user explicitly re-adds the device via addByMac.
@@ -436,7 +430,7 @@ export const updateDeviceReportInterval = action({
         };
       }
       
-      const tokenResult = await getAccessToken(config.appKey, config.appSecret);
+      const tokenResult = await qingping.getAccessToken(config.appKey, config.appSecret);
       accessToken = tokenResult.accessToken;
       
       await ctx.runMutation(internal.providers.updateToken, {
@@ -451,7 +445,7 @@ export const updateDeviceReportInterval = action({
     const collectInterval = Math.min(60, args.reportIntervalSeconds);
     
     try {
-      await updateDeviceSettings(accessToken, {
+      await qingping.updateDeviceSettings(accessToken, {
         mac: [device.providerDeviceId],
         report_interval: args.reportIntervalSeconds,
         collect_interval: collectInterval,
@@ -531,7 +525,7 @@ export const pollAllReadings = internalAction({
         }
         
         console.log("[POLLING] Token expired, refreshing for user:", config.userId);
-        const tokenResult = await getAccessToken(config.appKey, config.appSecret);
+      const tokenResult = await qingping.getAccessToken(config.appKey, config.appSecret);
         accessToken = tokenResult.accessToken;
         
         // Update the token in the database
@@ -544,13 +538,13 @@ export const pollAllReadings = internalAction({
 
       let devices;
       try {
-        devices = await listDevices(accessToken);
+        devices = await qingping.listDevices(accessToken);
         console.log(`[POLLING] Fetched ${devices.length} devices for user: ${config.userId}`);
       } catch (error: any) {
         // If we get a 401, try refreshing the token once more
         if (error?.message?.includes("401") && config.appKey && config.appSecret) {
           console.log("[POLLING] Got 401, refreshing token and retrying for user:", config.userId);
-          const tokenResult = await getAccessToken(config.appKey, config.appSecret);
+          const tokenResult = await qingping.getAccessToken(config.appKey, config.appSecret);
           accessToken = tokenResult.accessToken;
           
           await ctx.runMutation(internal.providers.updateToken, {
@@ -561,7 +555,7 @@ export const pollAllReadings = internalAction({
           
           // Retry once
           try {
-            devices = await listDevices(accessToken);
+            devices = await qingping.listDevices(accessToken);
             console.log(`[POLLING] Retry successful, fetched ${devices.length} devices for user: ${config.userId}`);
           } catch (retryError) {
             console.error("[POLLING] Failed after token refresh for user:", config.userId, retryError);
@@ -576,7 +570,7 @@ export const pollAllReadings = internalAction({
       }
 
       for (const device of devices) {
-        const reading = mapQingpingReading(device.data);
+        const reading = qingping.mapQingpingReading(device.data);
         if (!reading) {
           continue;
         }

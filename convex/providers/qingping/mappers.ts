@@ -1,9 +1,5 @@
-import type {
-  NormalizedDevice,
-  NormalizedReading,
-  QingpingDevice,
-  QingpingDeviceData,
-} from "../types";
+import type { NormalizedDevice, NormalizedReading } from "../types";
+import type { QingpingDevice, QingpingDeviceData } from "./types";
 
 export const mapQingpingDevice = (device: QingpingDevice): NormalizedDevice => {
   const name = device.info?.name ?? device.info?.mac ?? "Qingping Device";

@@ -1,4 +1,4 @@
-import type { QingpingDeviceData, QingpingWebhookBody } from "../types";
+import type { QingpingDeviceData, QingpingWebhookBody } from "./types";
 
 const toHex = (bytes: ArrayBuffer) =>
   Array.from(new Uint8Array(bytes))

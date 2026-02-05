@@ -1,6 +1,6 @@
 "use node";
 
-import type { QingpingDevice } from "../types";
+import type { QingpingDevice } from "./types";
 
 const QINGPING_API_BASE = "https://apis.cleargrass.com";
 const QINGPING_OAUTH_URL = "https://oauth.cleargrass.com/oauth2/token";
