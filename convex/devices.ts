@@ -1,6 +1,7 @@
 import { internalMutation, internalQuery, query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
+import { internal } from "./_generated/api";
 import { providerValidator } from "./lib/validators";
 
 const deviceShape = v.object({
@@ -18,6 +19,11 @@ const deviceShape = v.object({
   providerOffline: v.optional(v.boolean()),
   hiddenMetrics: v.optional(v.array(v.string())),
   dashboardMetrics: v.optional(v.array(v.string())),
+  primaryMetrics: v.optional(v.array(v.string())),
+  secondaryMetrics: v.optional(v.array(v.string())),
+  intervalChangeAt: v.optional(v.number()),
+  awaitingPostChangeReading: v.optional(v.boolean()),
+  reportInterval: v.optional(v.number()),
   createdAt: v.number(),
 });
 
@@ -99,17 +105,24 @@ export const updateHiddenMetrics = mutation({
 export const updateDashboardMetrics = mutation({
   args: {
     deviceId: v.id("devices"),
-    dashboardMetrics: v.array(v.string()),
+    primaryMetrics: v.array(v.string()),
+    secondaryMetrics: v.array(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    if (args.dashboardMetrics.length === 0) {
-      throw new Error("At least one dashboard metric must be selected.");
+    if (args.primaryMetrics.length === 0) {
+      throw new Error("At least one primary metric must be selected.");
     }
-    if (args.dashboardMetrics.length > 4) {
-      throw new Error("You can select up to 4 dashboard metrics.");
+    if (args.primaryMetrics.length > 2) {
+      throw new Error("You can select up to 2 primary metrics.");
     }
-    await ctx.db.patch(args.deviceId, { dashboardMetrics: args.dashboardMetrics });
+    if (args.secondaryMetrics.length > 6) {
+      throw new Error("You can select up to 6 secondary metrics.");
+    }
+    await ctx.db.patch(args.deviceId, { 
+      primaryMetrics: args.primaryMetrics,
+      secondaryMetrics: args.secondaryMetrics,
+    });
     return null;
   },
 });
@@ -124,6 +137,10 @@ export const deleteDevice = mutation({
     if (!device) {
       throw new Error("Device not found");
     }
+
+    // Note: We intentionally do NOT unbind the device from Qingping's cloud.
+    // This allows users to re-add the device without needing to re-bind via the Qingping+ app.
+    // The deletedDevices entry prevents automatic re-sync until the user explicitly re-adds.
 
     const existingDeleted = await ctx.db
       .query("deletedDevices")
@@ -255,6 +272,7 @@ export const upsertFromProvider = internalMutation({
       model: args.model,
       timezone: args.timezone,
       providerOffline: args.providerOffline,
+      reportInterval: 3600,
       createdAt: Date.now(),
     });
   },
@@ -346,6 +364,7 @@ export const addByMac = mutation({
       provider: args.provider,
       providerDeviceId: args.macAddress,
       name: args.name,
+      reportInterval: 3600,
       createdAt: Date.now(),
     });
   },
@@ -369,6 +388,82 @@ export const isDeletedForUser = internalQuery({
       )
       .first();
     return Boolean(existing);
+  },
+});
+
+export const isDeletedByProviderDeviceId = internalQuery({
+  args: {
+    provider: providerValidator,
+    providerDeviceId: v.string(),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("deletedDevices")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("provider"), args.provider),
+          q.eq(q.field("providerDeviceId"), args.providerDeviceId),
+        ),
+      )
+      .first();
+    return Boolean(existing);
+  },
+});
+
+export const removeDeletedDevice = internalMutation({
+  args: {
+    provider: providerValidator,
+    providerDeviceId: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("deletedDevices")
+      .withIndex("by_provider_and_providerDeviceId", (q) =>
+        q.eq("provider", args.provider).eq("providerDeviceId", args.providerDeviceId),
+      )
+      .first();
+
+    if (existing) {
+      await ctx.db.delete(existing._id);
+    }
+
+    return null;
+  },
+});
+
+export const getInternal = internalQuery({
+  args: {
+    deviceId: v.id("devices"),
+  },
+  returns: v.union(v.null(), deviceShape),
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.deviceId);
+  },
+});
+
+export const updateReportInterval = internalMutation({
+  args: {
+    deviceId: v.id("devices"),
+    reportInterval: v.number(),
+    intervalChangeAt: v.optional(v.number()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const patch: {
+      reportInterval: number;
+      intervalChangeAt?: number;
+    } = {
+      reportInterval: args.reportInterval,
+    };
+    
+    if (args.intervalChangeAt !== undefined) {
+      patch.intervalChangeAt = args.intervalChangeAt;
+    }
+    
+    await ctx.db.patch(args.deviceId, patch);
+    return null;
   },
 });
 

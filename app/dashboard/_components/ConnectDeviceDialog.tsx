@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -57,6 +57,7 @@ export function ConnectDeviceDialog({
   );
   const connectProvider = useMutation(api.providers.connect);
   const addDevice = useMutation(api.devices.addByMac);
+  const syncDevices = useAction(api.providersActions.syncDevicesForUserPublic);
 
   const [isBrandStep, setIsBrandStep] = useState(true);
   const [stepIndex, setStepIndex] = useState(0);
@@ -180,6 +181,8 @@ export function ConnectDeviceDialog({
         macAddress: normalizedMac,
         provider: "qingping",
       });
+
+      await syncDevices({ userId, provider: "qingping" });
 
       onOpenChange(false);
     } catch (err) {

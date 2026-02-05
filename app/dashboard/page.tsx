@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useAuth, useUser } from "@clerk/nextjs";
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -21,28 +21,18 @@ import {
   getTVOCLevel,
 } from "@/lib/aqi-levels";
 import { RadialGaugeInline } from "@/components/ui/radial-gauge";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Switch } from "@/components/ui/switch";
-import { Plus, ChevronRight, Settings } from "lucide-react";
+import { SecondaryMetricItem, type MetricKey } from "@/components/ui/secondary-metric";
+import { Plus, Settings } from "lucide-react";
 import { useAddDeviceDialog } from "./_components/add-device-context";
+import { DeviceSettingsDialog } from "@/app/dashboard/_components/DeviceSettingsDialog";
 
 export default function DashboardPage() {
   const router = useRouter();
   const { isLoaded, userId } = useAuth();
   const { user } = useUser();
   const getOrCreateUser = useMutation(api.users.getOrCreateUser);
-  const syncDevices = useAction(api.providersActions.syncDevicesForUserPublic);
   const { openDialog } = useAddDeviceDialog();
   const [convexUserId, setConvexUserId] = useState<Id<"users"> | null>(null);
-  const [syncing, setSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
-  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -76,35 +66,6 @@ export default function DashboardPage() {
     convexUserId ? { userId: convexUserId } : "skip"
   );
 
-  const handleSyncNow = async () => {
-    if (!convexUserId || syncing) return;
-    setSyncing(true);
-    setSyncMessage(null);
-
-    try {
-      await syncDevices({ userId: convexUserId, provider: "qingping" });
-      setLastSyncedAt(Date.now());
-      setSyncMessage("Sync completed. Updating device status...");
-      // Clear success message after 3 seconds
-      setTimeout(() => setSyncMessage(null), 3000);
-    } catch (error: any) {
-      // Check if it's a "function not found" error (Convex dev still syncing)
-      const errorMessage = error?.message || String(error);
-      if (errorMessage.includes("Could not find public function") || 
-          errorMessage.includes("Did you forget to run")) {
-        setSyncMessage("Sync function not ready yet. Please wait a moment and try again.");
-      } else {
-        setSyncMessage("Sync failed. Please check your provider connection.");
-      }
-      // Don't log to console in production - only in dev
-      if (process.env.NODE_ENV === "development") {
-        console.error("Sync error:", error);
-      }
-    } finally {
-      setSyncing(false);
-    }
-  };
-
   if (!convexUserId) {
     return null;
   }
@@ -112,30 +73,11 @@ export default function DashboardPage() {
   return (
     <div className="p-8">
       {/* Header */}
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="mt-1 text-muted-foreground">
-            Overview of your air quality monitors
-          </p>
-        </div>
-        <div className="flex flex-col items-start gap-2 sm:items-end">
-          <Button
-            variant="outline"
-            onClick={handleSyncNow}
-            disabled={syncing}
-          >
-            {syncing ? "Syncing..." : "Sync now"}
-          </Button>
-          {lastSyncedAt && (
-            <span className="text-xs text-muted-foreground">
-              Last synced: {formatRelativeTime(lastSyncedAt)}
-            </span>
-          )}
-          {syncMessage && (
-            <span className="text-xs text-muted-foreground">{syncMessage}</span>
-          )}
-        </div>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold">Dashboard</h1>
+        <p className="mt-1 text-muted-foreground">
+          Overview of your air quality monitors
+        </p>
       </div>
 
       {/* Empty State */}
@@ -159,9 +101,13 @@ export default function DashboardPage() {
 
       {/* Device Grid */}
       {devices && devices.length > 0 && (
-        <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-6 grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {devices.map((device) => (
-            <DeviceOverviewCard key={device._id} device={device} />
+            <DeviceOverviewCard
+              key={device._id}
+              device={device}
+              userId={convexUserId}
+            />
           ))}
         </div>
       )}
@@ -172,19 +118,25 @@ export default function DashboardPage() {
 // Mini device card for the overview - name on top, gauges below
 function DeviceOverviewCard({
   device,
+  userId,
 }: {
   device: {
     _id: Id<"devices">;
+    userId: Id<"users">;
     name: string;
     model?: string;
     lastReadingAt?: number;
     lastBattery?: number;
     providerOffline?: boolean;
     dashboardMetrics?: string[];
+    primaryMetrics?: string[];
+    secondaryMetrics?: string[];
+    hiddenMetrics?: string[];
+    reportInterval?: number;
   };
+  userId: Id<"users">;
 }) {
   const reading = useQuery(api.readings.latest, { deviceId: device._id });
-  const updateDashboardMetrics = useMutation(api.devices.updateDashboardMetrics);
 
   const lastReadingAt = reading?.ts ?? device.lastReadingAt;
   const status = getDeviceStatus({
@@ -268,77 +220,49 @@ function DeviceOverviewCard({
     );
   }, [reading]);
 
-  const defaultDashboardMetrics = useMemo(
-    () => availableMetrics.map((metric) => metric.key).slice(0, 4),
+  const availableMetricKeys = availableMetrics.map((metric) => metric.key);
+
+  // Default primary metrics: first 2 available
+  const defaultPrimaryMetrics = useMemo(
+    () => availableMetrics.map((metric) => metric.key).slice(0, 2),
     [availableMetrics]
   );
 
-  const [dashboardSelection, setDashboardSelection] = useState<string[]>(
-    device.dashboardMetrics && device.dashboardMetrics.length > 0
-      ? device.dashboardMetrics
-      : defaultDashboardMetrics
+  // Default secondary metrics: next 4 available (after primary)
+  const defaultSecondaryMetrics = useMemo(
+    () => availableMetrics.map((metric) => metric.key).slice(2, 6),
+    [availableMetrics]
   );
-  const [dashboardError, setDashboardError] = useState<string | null>(null);
-  const [isSavingDashboard, setIsSavingDashboard] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
-  useEffect(() => {
-    if (device.dashboardMetrics && device.dashboardMetrics.length > 0) {
-      setDashboardSelection(device.dashboardMetrics);
-    } else {
-      setDashboardSelection(defaultDashboardMetrics);
-    }
-    setDashboardError(null);
-  }, [device.dashboardMetrics, defaultDashboardMetrics]);
+  // Use stored metrics or fall back to defaults
+  const primarySelection =
+    device.primaryMetrics && device.primaryMetrics.length > 0
+      ? device.primaryMetrics
+      : defaultPrimaryMetrics;
+  
+  const secondarySelection =
+    device.secondaryMetrics && device.secondaryMetrics.length > 0
+      ? device.secondaryMetrics
+      : defaultSecondaryMetrics;
 
-  const availableMetricKeys = availableMetrics.map((metric) => metric.key);
-  const selectedMetrics = dashboardSelection
+  // Filter to only available metrics
+  const selectedPrimaryMetrics = primarySelection
     .filter((key) => availableMetricKeys.includes(key))
     .filter((key) => key in metricConfig)
-    .slice(0, 4);
+    .slice(0, 2);
 
-  const handleToggleDashboardMetric = (metricKey: string) => {
-    setDashboardError(null);
-    const isSelected = dashboardSelection.includes(metricKey);
-    if (!isSelected && dashboardSelection.length >= 4) {
-      setDashboardError("You can show up to 4 metrics.");
-      return;
-    }
-    if (isSelected && dashboardSelection.length <= 1) {
-      setDashboardError("Select at least 1 metric.");
-      return;
-    }
-    setDashboardSelection((prev) =>
-      isSelected ? prev.filter((key) => key !== metricKey) : [...prev, metricKey]
-    );
-  };
+  const selectedSecondaryMetrics = secondarySelection
+    .filter((key) => availableMetricKeys.includes(key))
+    .filter((key) => key in metricConfig)
+    .slice(0, 6);
 
-  const handleSaveDashboardMetrics = async () => {
-    if (dashboardSelection.length === 0 || dashboardSelection.length > 4) {
-      setDashboardError("Select 1 to 4 metrics.");
-      return;
-    }
-    setIsSavingDashboard(true);
-    setDashboardError(null);
-    try {
-      await updateDashboardMetrics({
-        deviceId: device._id,
-        dashboardMetrics: dashboardSelection,
-      });
-      setSettingsOpen(false);
-    } catch (err) {
-      setDashboardError(
-        err instanceof Error ? err.message : "Failed to update dashboard metrics"
-      );
-    } finally {
-      setIsSavingDashboard(false);
-    }
-  };
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
   return (
     <>
       <Link href={`/dashboard/device/${device._id}`}>
-        <Card className="group relative overflow-hidden transition-all hover:shadow-lg w-full">
-          <CardContent className="pl-6 pr-8 pt-5 pb-5">
+        <Card className="group relative overflow-hidden transition-all hover:shadow-lg w-full min-w-[320px]">
+          <CardContent className="px-5 pt-5 pb-5">
             {/* Top: Device name, model, and status */}
             <div className="flex items-start justify-between mb-4">
               <div className="flex-1 min-w-0">
@@ -362,7 +286,7 @@ function DeviceOverviewCard({
                       event.stopPropagation();
                       setSettingsOpen(true);
                     }}
-                    aria-label="Configure dashboard metrics"
+                    aria-label="Configure device settings"
                   >
                     <Settings className="h-4 w-4" />
                   </Button>
@@ -371,24 +295,49 @@ function DeviceOverviewCard({
                   {device.model ?? "Qingping"}
                 </p>
               </div>
-              <ChevronRight className="h-5 w-5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 ml-2 flex-shrink-0" />
             </div>
 
-            {/* Bottom: Radial gauges - always inline */}
+            {/* Primary metrics: Hero radial gauges */}
             {displayReading ? (
-              <div className="flex items-center justify-start gap-6">
-                {selectedMetrics.map((key) => {
-                  const metric = metricConfig[key as keyof typeof metricConfig];
-                  return (
-                    <RadialGaugeInline
-                      key={key}
-                      label={metric.label}
-                      value={metric.value}
-                      unit={metric.unit}
-                      level={metric.level}
-                    />
-                  );
-                })}
+              <div className="space-y-4">
+                {/* Hero gauges - up to 2, left-aligned */}
+                {selectedPrimaryMetrics.length > 0 && (
+                  <div className="flex gap-6">
+                    {selectedPrimaryMetrics.map((key) => {
+                      const metric = metricConfig[key as keyof typeof metricConfig];
+                      return (
+                        <RadialGaugeInline
+                          key={key}
+                          label={metric.label}
+                          value={metric.value}
+                          unit={metric.unit}
+                          level={metric.level}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Secondary metrics: Compact list with icons */}
+                {selectedSecondaryMetrics.length > 0 && (
+                  <div className="border-t border-border/40 pt-3 mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-0.5">
+                      {selectedSecondaryMetrics.map((key) => {
+                        const metric = metricConfig[key as keyof typeof metricConfig];
+                        return (
+                          <SecondaryMetricItem
+                            key={key}
+                            metricKey={key as MetricKey}
+                            label={metric.label}
+                            value={metric.value}
+                            unit={metric.unit}
+                            level={metric.level}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="py-4 text-sm text-muted-foreground">
@@ -400,63 +349,25 @@ function DeviceOverviewCard({
       </Link>
 
       {/* Settings Dialog - outside the Link to prevent navigation issues */}
-      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Display Metrics</DialogTitle>
-            <DialogDescription>
-              Choose up to 4 metrics for this dashboard card.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            <div className="space-y-2">
-              {availableMetrics.map((metric) => (
-                <div
-                  key={`dashboard-${metric.key}`}
-                  className="flex items-center justify-between rounded-lg border px-3 py-2"
-                >
-                  <span className="text-sm">{metric.label}</span>
-                  <Switch
-                    checked={dashboardSelection.includes(metric.key)}
-                    onCheckedChange={() =>
-                      handleToggleDashboardMetric(metric.key)
-                    }
-                  />
-                </div>
-              ))}
-              {availableMetrics.length === 0 && (
-                <p className="text-sm text-muted-foreground">
-                  No metrics available yet.
-                </p>
-              )}
-            </div>
-            {dashboardError && (
-              <p className="text-sm text-destructive">{dashboardError}</p>
-            )}
-            <div className="flex justify-end pt-2">
-              <Button
-                onClick={handleSaveDashboardMetrics}
-                disabled={isSavingDashboard || availableMetrics.length === 0}
-              >
-                {isSavingDashboard ? "Saving..." : "Save"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <DeviceSettingsDialog
+        deviceId={device._id}
+        userId={userId}
+        deviceName={device.name}
+        hiddenMetrics={device.hiddenMetrics}
+        availableMetrics={availableMetricKeys}
+        reportInterval={device.reportInterval}
+        primaryMetrics={primarySelection}
+        secondaryMetrics={secondarySelection}
+        dashboardMetricOptions={availableMetrics.map((metric) => ({
+          key: metric.key,
+          label: metric.label,
+        }))}
+        hideProfileMetrics={true}
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        trigger={<></>}
+      />
     </>
   );
 }
 
-function formatRelativeTime(timestampMs: number) {
-  const diffMs = Date.now() - timestampMs;
-  if (diffMs < 0) return "just now";
-  const seconds = Math.floor(diffMs / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}

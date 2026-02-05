@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useMutation } from "convex/react";
+import { useAction, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 
 import { api } from "@/convex/_generated/api";
@@ -19,16 +19,41 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle, Loader2, Trash2 } from "lucide-react";
+import { AlertTriangle, Loader2, Trash2, Clock } from "lucide-react";
 
 type DeviceSettingsDialogProps = {
   deviceId: Id<"devices">;
+  userId: Id<"users">;
   deviceName: string;
   hiddenMetrics?: string[];
   availableMetrics?: string[];
+  reportInterval?: number;
+  primaryMetrics?: string[];
+  secondaryMetrics?: string[];
+  dashboardMetricOptions?: { key: string; label: string }[];
   trigger: React.ReactNode;
+  /** Hide profile-specific sections (Visible Metrics) when opened from dashboard */
+  hideProfileMetrics?: boolean;
+  /** Control dialog open state externally */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
+
+const INTERVAL_OPTIONS = [
+  { value: 60, label: "1 minute" },
+  { value: 300, label: "5 minutes" },
+  { value: 600, label: "10 minutes" },
+  { value: 1800, label: "30 minutes" },
+  { value: 3600, label: "1 hour" },
+];
 
 const METRIC_OPTIONS = [
   { key: "pm25", label: "PM2.5" },
@@ -42,17 +67,32 @@ const METRIC_OPTIONS = [
 
 export function DeviceSettingsDialog({
   deviceId,
+  userId,
   deviceName,
   hiddenMetrics,
   availableMetrics,
+  reportInterval,
+  primaryMetrics,
+  secondaryMetrics,
+  dashboardMetricOptions,
   trigger,
+  hideProfileMetrics = false,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
 }: DeviceSettingsDialogProps) {
   const router = useRouter();
   const updateHiddenMetrics = useMutation(api.devices.updateHiddenMetrics);
   const renameDevice = useMutation(api.devices.rename);
   const deleteDevice = useMutation(api.devices.deleteDevice);
+  const updateReportInterval = useAction(api.providersActions.updateDeviceReportInterval);
+  const updateDashboardMetrics = useMutation(api.devices.updateDashboardMetrics);
 
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  
+  // Support both controlled and uncontrolled modes
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = isControlled ? (controlledOnOpenChange ?? (() => {})) : setInternalOpen;
   const [renameValue, setRenameValue] = useState(deviceName);
   const [hiddenMetricKeys, setHiddenMetricKeys] = useState<string[]>(
     hiddenMetrics ?? []
@@ -66,6 +106,17 @@ export function DeviceSettingsDialog({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const [selectedInterval, setSelectedInterval] = useState<string>(
+    String(reportInterval ?? 3600)
+  );
+  const [isUpdatingInterval, setIsUpdatingInterval] = useState(false);
+  const [intervalError, setIntervalError] = useState<string | null>(null);
+  const [intervalSuccess, setIntervalSuccess] = useState<string | null>(null);
+
+  const [primarySelection, setPrimarySelection] = useState<string[]>([]);
+  const [secondarySelection, setSecondarySelection] = useState<string[]>([]);
+  const [metricsSelectionError, setMetricsSelectionError] = useState<string | null>(null);
 
   const availableMetricSet = useMemo(
     () => new Set(availableMetrics ?? METRIC_OPTIONS.map((metric) => metric.key)),
@@ -90,14 +141,149 @@ export function DeviceSettingsDialog({
     if (open) {
       setRenameValue(deviceName);
       setHiddenMetricKeys(hiddenMetrics ?? []);
+      setSelectedInterval(String(reportInterval ?? 3600));
       setMetricsError(null);
       setRenameError(null);
+      setIntervalError(null);
+      setIntervalSuccess(null);
+      setMetricsSelectionError(null);
+      
+      if (dashboardMetricOptions && dashboardMetricOptions.length > 0) {
+        const allKeys = dashboardMetricOptions.map((m) => m.key);
+        // Default primary: first 2 available
+        const defaultPrimary = allKeys.slice(0, 2);
+        // Default secondary: next 4 available
+        const defaultSecondary = allKeys.slice(2, 6);
+        
+        setPrimarySelection(
+          primaryMetrics && primaryMetrics.length > 0
+            ? primaryMetrics
+            : defaultPrimary
+        );
+        setSecondarySelection(
+          secondaryMetrics && secondaryMetrics.length > 0
+            ? secondaryMetrics
+            : defaultSecondary
+        );
+      }
     }
   }, [
     deviceName,
     hiddenMetrics,
+    reportInterval,
+    primaryMetrics,
+    secondaryMetrics,
+    dashboardMetricOptions,
     open,
   ]);
+
+  const handleTogglePrimaryMetric = async (metricKey: string) => {
+    setMetricsSelectionError(null);
+    const isSelected = primarySelection.includes(metricKey);
+    
+    if (!isSelected && primarySelection.length >= 2) {
+      setMetricsSelectionError("You can select up to 2 primary metrics.");
+      return;
+    }
+    if (isSelected && primarySelection.length <= 1) {
+      setMetricsSelectionError("Select at least 1 primary metric.");
+      return;
+    }
+    
+    const newPrimary = isSelected
+      ? primarySelection.filter((key) => key !== metricKey)
+      : [...primarySelection, metricKey];
+    
+    // If adding to primary, remove from secondary
+    const newSecondary = isSelected
+      ? secondarySelection
+      : secondarySelection.filter((key) => key !== metricKey);
+    
+    setPrimarySelection(newPrimary);
+    setSecondarySelection(newSecondary);
+    
+    // Auto-save immediately
+    try {
+      await updateDashboardMetrics({
+        deviceId,
+        primaryMetrics: newPrimary,
+        secondaryMetrics: newSecondary,
+      });
+    } catch (err) {
+      // Revert on error
+      setPrimarySelection(primarySelection);
+      setSecondarySelection(secondarySelection);
+      setMetricsSelectionError(
+        err instanceof Error ? err.message : "Failed to update metrics"
+      );
+    }
+  };
+
+  const handleToggleSecondaryMetric = async (metricKey: string) => {
+    setMetricsSelectionError(null);
+    const isSelected = secondarySelection.includes(metricKey);
+    
+    if (!isSelected && secondarySelection.length >= 6) {
+      setMetricsSelectionError("You can select up to 6 secondary metrics.");
+      return;
+    }
+    
+    const newSecondary = isSelected
+      ? secondarySelection.filter((key) => key !== metricKey)
+      : [...secondarySelection, metricKey];
+    
+    // If adding to secondary, remove from primary
+    const newPrimary = isSelected
+      ? primarySelection
+      : primarySelection.filter((key) => key !== metricKey);
+    
+    setPrimarySelection(newPrimary);
+    setSecondarySelection(newSecondary);
+    
+    // Auto-save immediately
+    try {
+      await updateDashboardMetrics({
+        deviceId,
+        primaryMetrics: newPrimary,
+        secondaryMetrics: newSecondary,
+      });
+    } catch (err) {
+      // Revert on error
+      setPrimarySelection(primarySelection);
+      setSecondarySelection(secondarySelection);
+      setMetricsSelectionError(
+        err instanceof Error ? err.message : "Failed to update metrics"
+      );
+    }
+  };
+
+  const handleIntervalChange = async (value: string) => {
+    setSelectedInterval(value);
+    setIntervalError(null);
+    setIntervalSuccess(null);
+    setIsUpdatingInterval(true);
+    
+    try {
+      const result = await updateReportInterval({
+        userId,
+        deviceId,
+        reportIntervalSeconds: Number(value),
+      });
+      
+      if (result.success) {
+        setIntervalSuccess(result.message);
+      } else {
+        setIntervalError(result.message);
+        // Revert to previous value on failure
+        setSelectedInterval(String(reportInterval ?? 3600));
+      }
+    } catch (err) {
+      setIntervalError(err instanceof Error ? err.message : "Failed to update interval");
+      setSelectedInterval(String(reportInterval ?? 3600));
+    } finally {
+      setIsUpdatingInterval(false);
+    }
+  };
 
   const handleToggleMetric = async (metricKey: string) => {
     setMetricsError(null);
@@ -165,7 +351,7 @@ export function DeviceSettingsDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild>{trigger}</DialogTrigger>
+        {!isControlled && <DialogTrigger asChild>{trigger}</DialogTrigger>}
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Device Settings</DialogTitle>
@@ -174,41 +360,153 @@ export function DeviceSettingsDialog({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-6 py-2">
-            <div className="space-y-3">
-              <div>
-                <h4 className="text-sm font-medium">Visible Metrics</h4>
-                <p className="text-xs text-muted-foreground">
-                  Choose which metrics appear on the device profile.
-                </p>
-              </div>
-              <div className="space-y-3">
-                {METRIC_OPTIONS.filter((metric) =>
-                  availableMetricSet.has(metric.key)
-                ).map((metric) => (
-                  <div
-                    key={metric.key}
-                    className="flex items-center justify-between rounded-lg border px-3 py-2"
-                  >
-                    <Label htmlFor={`metric-${metric.key}`} className="text-sm">
-                      {metric.label}
-                    </Label>
-                    <Switch
-                      id={`metric-${metric.key}`}
-                      checked={!hiddenMetricsSet.has(metric.key)}
-                      onCheckedChange={() => handleToggleMetric(metric.key)}
-                      disabled={isUpdatingMetrics}
-                    />
+          <div className="space-y-6 py-2 max-h-[70vh] overflow-y-auto">
+            {dashboardMetricOptions && dashboardMetricOptions.length > 0 && (
+              <>
+                {/* Primary Metrics Section */}
+                <div className="space-y-3">
+                  <div>
+                    <h4 className="text-sm font-medium">Primary Metrics</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Select up to 2 metrics shown as large gauges.
+                    </p>
                   </div>
-                ))}
-                {availableMetricSet.size === 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    No metrics available yet.
+                  <div className="space-y-2">
+                    {dashboardMetricOptions.map((metric) => (
+                      <div
+                        key={`primary-${metric.key}`}
+                        className="flex items-center justify-between rounded-lg border px-3 py-2"
+                      >
+                        <Label htmlFor={`primary-${metric.key}`} className="text-sm">
+                          {metric.label}
+                        </Label>
+                        <Switch
+                          id={`primary-${metric.key}`}
+                          checked={primarySelection.includes(metric.key)}
+                          onCheckedChange={() => handleTogglePrimaryMetric(metric.key)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {primarySelection.length}/2 selected
                   </p>
+                </div>
+
+                {/* Secondary Metrics Section */}
+                <div className="space-y-3">
+                  <div>
+                    <h4 className="text-sm font-medium">Secondary Metrics</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Select up to 6 metrics shown as compact rows below.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    {dashboardMetricOptions
+                      .filter((metric) => !primarySelection.includes(metric.key))
+                      .map((metric) => (
+                        <div
+                          key={`secondary-${metric.key}`}
+                          className="flex items-center justify-between rounded-lg border px-3 py-2"
+                        >
+                          <Label htmlFor={`secondary-${metric.key}`} className="text-sm">
+                            {metric.label}
+                          </Label>
+                          <Switch
+                            id={`secondary-${metric.key}`}
+                            checked={secondarySelection.includes(metric.key)}
+                            onCheckedChange={() => handleToggleSecondaryMetric(metric.key)}
+                          />
+                        </div>
+                      ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {secondarySelection.length}/6 selected
+                  </p>
+                </div>
+
+                {metricsSelectionError && (
+                  <p className="text-sm text-destructive">{metricsSelectionError}</p>
+                )}
+              </>
+            )}
+
+            {!hideProfileMetrics && (
+              <div className="space-y-3">
+                <div>
+                  <h4 className="text-sm font-medium">Visible Metrics</h4>
+                  <p className="text-xs text-muted-foreground">
+                    Choose which metrics appear on the device profile.
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  {METRIC_OPTIONS.filter((metric) =>
+                    availableMetricSet.has(metric.key)
+                  ).map((metric) => (
+                    <div
+                      key={metric.key}
+                      className="flex items-center justify-between rounded-lg border px-3 py-2"
+                    >
+                      <Label htmlFor={`metric-${metric.key}`} className="text-sm">
+                        {metric.label}
+                      </Label>
+                      <Switch
+                        id={`metric-${metric.key}`}
+                        checked={!hiddenMetricsSet.has(metric.key)}
+                        onCheckedChange={() => handleToggleMetric(metric.key)}
+                        disabled={isUpdatingMetrics}
+                      />
+                    </div>
+                  ))}
+                  {availableMetricSet.size === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      No metrics available yet.
+                    </p>
+                  )}
+                </div>
+                {metricsError && (
+                  <p className="text-sm text-destructive">{metricsError}</p>
                 )}
               </div>
-              {metricsError && (
-                <p className="text-sm text-destructive">{metricsError}</p>
+            )}
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <h4 className="text-sm font-medium">Data Refresh Interval</h4>
+                  <p className="text-xs text-muted-foreground">
+                    How often the sensor sends new readings.
+                  </p>
+                </div>
+              </div>
+              <Select
+                value={selectedInterval}
+                onValueChange={handleIntervalChange}
+                disabled={isUpdatingInterval}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select interval" />
+                </SelectTrigger>
+                <SelectContent>
+                  {INTERVAL_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={String(option.value)}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {isUpdatingInterval && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Updating interval...
+                </div>
+              )}
+              {intervalError && (
+                <p className="text-sm text-destructive">{intervalError}</p>
+              )}
+              {intervalSuccess && (
+                <p className="text-sm text-emerald-500">{intervalSuccess}</p>
               )}
             </div>
 
@@ -220,7 +518,6 @@ export function DeviceSettingsDialog({
                 </p>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="device-name">Device Name</Label>
                 <Input
                   id="device-name"
                   value={renameValue}

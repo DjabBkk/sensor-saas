@@ -54,17 +54,22 @@ export declare const api: {
       null | {
         _creationTime: number;
         _id: Id<"devices">;
+        awaitingPostChangeReading?: boolean;
         createdAt: number;
         dashboardMetrics?: Array<string>;
         hiddenMetrics?: Array<string>;
+        intervalChangeAt?: number;
         lastBattery?: number;
         lastReadingAt?: number;
         model?: string;
         name: string;
+        primaryMetrics?: Array<string>;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         providerDeviceId: string;
         providerOffline?: boolean;
+        reportInterval?: number;
         roomId?: Id<"rooms">;
+        secondaryMetrics?: Array<string>;
         timezone?: string;
         userId: Id<"users">;
       }
@@ -82,17 +87,22 @@ export declare const api: {
       Array<{
         _creationTime: number;
         _id: Id<"devices">;
+        awaitingPostChangeReading?: boolean;
         createdAt: number;
         dashboardMetrics?: Array<string>;
         hiddenMetrics?: Array<string>;
+        intervalChangeAt?: number;
         lastBattery?: number;
         lastReadingAt?: number;
         model?: string;
         name: string;
+        primaryMetrics?: Array<string>;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         providerDeviceId: string;
         providerOffline?: boolean;
+        reportInterval?: number;
         roomId?: Id<"rooms">;
+        secondaryMetrics?: Array<string>;
         timezone?: string;
         userId: Id<"users">;
       }>
@@ -106,7 +116,11 @@ export declare const api: {
     updateDashboardMetrics: FunctionReference<
       "mutation",
       "public",
-      { dashboardMetrics: Array<string>; deviceId: Id<"devices"> },
+      {
+        deviceId: Id<"devices">;
+        primaryMetrics: Array<string>;
+        secondaryMetrics: Array<string>;
+      },
       null
     >;
     updateHiddenMetrics: FunctionReference<
@@ -185,6 +199,21 @@ export declare const api: {
       "public",
       { tokenId: Id<"embedTokens"> },
       null
+    >;
+  };
+  intervalChanges: {
+    listForDevice: FunctionReference<
+      "query",
+      "public",
+      { deviceId: Id<"devices">; endTs?: number; startTs?: number },
+      Array<{
+        _creationTime: number;
+        _id: Id<"intervalChanges">;
+        changedAt: number;
+        deviceId: Id<"devices">;
+        newInterval: number;
+        previousInterval: number;
+      }>
     >;
   };
   kioskConfigs: {
@@ -291,6 +320,16 @@ export declare const api: {
         userId: Id<"users">;
       },
       null
+    >;
+    updateDeviceReportInterval: FunctionReference<
+      "action",
+      "public",
+      {
+        deviceId: Id<"devices">;
+        reportIntervalSeconds: number;
+        userId: Id<"users">;
+      },
+      { message: string; success: boolean }
     >;
   };
   public: {
@@ -410,6 +449,7 @@ export declare const api: {
         battery?: number;
         co2?: number;
         deviceId: Id<"devices">;
+        deviceName?: string;
         pm10?: number;
         pm25?: number;
         pressure?: number;
@@ -417,6 +457,29 @@ export declare const api: {
         tempC?: number;
         ts: number;
         voc?: number;
+      }>
+    >;
+    historyAggregated: FunctionReference<
+      "query",
+      "public",
+      {
+        bucketMinutes: number;
+        deviceId: Id<"devices">;
+        endTs: number;
+        startTs: number;
+      },
+      Array<{
+        aqi: number | null;
+        battery: number | null;
+        co2: number | null;
+        count: number;
+        pm10: number | null;
+        pm25: number | null;
+        pressure: number | null;
+        rh: number | null;
+        tempC: number | null;
+        ts: number;
+        voc: number | null;
       }>
     >;
     latest: FunctionReference<
@@ -430,6 +493,7 @@ export declare const api: {
         battery?: number;
         co2?: number;
         deviceId: Id<"devices">;
+        deviceName?: string;
         pm10?: number;
         pm25?: number;
         pressure?: number;
@@ -541,6 +605,42 @@ export declare const internal: {
       },
       null | { _id: Id<"devices">; userId: Id<"users"> }
     >;
+    getInternal: FunctionReference<
+      "query",
+      "internal",
+      { deviceId: Id<"devices"> },
+      null | {
+        _creationTime: number;
+        _id: Id<"devices">;
+        awaitingPostChangeReading?: boolean;
+        createdAt: number;
+        dashboardMetrics?: Array<string>;
+        hiddenMetrics?: Array<string>;
+        intervalChangeAt?: number;
+        lastBattery?: number;
+        lastReadingAt?: number;
+        model?: string;
+        name: string;
+        primaryMetrics?: Array<string>;
+        provider: "qingping" | "purpleair" | "iqair" | "temtop";
+        providerDeviceId: string;
+        providerOffline?: boolean;
+        reportInterval?: number;
+        roomId?: Id<"rooms">;
+        secondaryMetrics?: Array<string>;
+        timezone?: string;
+        userId: Id<"users">;
+      }
+    >;
+    isDeletedByProviderDeviceId: FunctionReference<
+      "query",
+      "internal",
+      {
+        provider: "qingping" | "purpleair" | "iqair" | "temtop";
+        providerDeviceId: string;
+      },
+      boolean
+    >;
     isDeletedForUser: FunctionReference<
       "query",
       "internal",
@@ -550,6 +650,25 @@ export declare const internal: {
         userId: Id<"users">;
       },
       boolean
+    >;
+    removeDeletedDevice: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        provider: "qingping" | "purpleair" | "iqair" | "temtop";
+        providerDeviceId: string;
+      },
+      null
+    >;
+    updateReportInterval: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        deviceId: Id<"devices">;
+        intervalChangeAt?: number;
+        reportInterval: number;
+      },
+      null
     >;
     upsertFromProvider: FunctionReference<
       "mutation",
@@ -583,6 +702,18 @@ export declare const internal: {
         token: string;
         userId: Id<"users">;
       }
+    >;
+  };
+  intervalChanges: {
+    record: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        deviceId: Id<"devices">;
+        newInterval: number;
+        previousInterval: number;
+      },
+      Id<"intervalChanges">
     >;
   };
   kioskConfigs: {
@@ -717,6 +848,18 @@ export declare const internal: {
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         userId: Id<"users">;
       },
+      null
+    >;
+    unbindQingpingDevice: FunctionReference<
+      "action",
+      "internal",
+      { accessToken: string; mac: string },
+      null
+    >;
+    unbindQingpingDeviceForDeviceId: FunctionReference<
+      "action",
+      "internal",
+      { mac: string; userId: Id<"users"> },
       null
     >;
   };

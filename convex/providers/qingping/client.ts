@@ -1,6 +1,6 @@
 "use node";
 
-import type { QingpingDevice } from "../types";
+import type { QingpingDevice } from "./types";
 
 const QINGPING_API_BASE = "https://apis.cleargrass.com";
 const QINGPING_OAUTH_URL = "https://oauth.cleargrass.com/oauth2/token";
@@ -74,4 +74,68 @@ export const getHistoryData = async (
   });
 
   return apiFetch(accessToken, `/v1/apis/devices/data?${params}`);
+};
+
+type UpdateDeviceSettingsParams = {
+  mac: string[];
+  report_interval: number;
+  collect_interval: number;
+  timestamp: number;
+};
+
+export const updateDeviceSettings = async (
+  accessToken: string,
+  params: UpdateDeviceSettingsParams,
+) => {
+  const response = await fetch(`${QINGPING_API_BASE}/v1/apis/devices/settings`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Qingping API error: ${response.status} - ${errorText}`);
+  }
+
+  const text = await response.text();
+  if (!text || text.trim() === "") {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+};
+
+export const unbindDevice = async (accessToken: string, mac: string) => {
+  const response = await fetch(`${QINGPING_API_BASE}/v1/apis/devices`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ mac: [mac], timestamp: Date.now() }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Qingping API error: ${response.status} - ${errorText}`);
+  }
+
+  const text = await response.text();
+  if (!text || text.trim() === "") {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
 };

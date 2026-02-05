@@ -53,6 +53,7 @@ type Reading = {
 
 type Device = {
   _id: Id<"devices">;
+  userId: Id<"users">;
   name: string;
   model?: string;
   lastReadingAt?: number;
@@ -60,6 +61,7 @@ type Device = {
   providerOffline?: boolean;
   hiddenMetrics?: string[];
   dashboardMetrics?: string[];
+  reportInterval?: number;
 };
 
 type DeviceCardProps = {
@@ -421,9 +423,11 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
               />
               <DeviceSettingsDialog
                 deviceId={device._id}
+                userId={device.userId}
                 deviceName={device.name}
                 hiddenMetrics={device.hiddenMetrics}
                 availableMetrics={availableMetricKeys}
+                reportInterval={device.reportInterval}
                 trigger={
                   <Button
                     variant="ghost"
@@ -437,7 +441,7 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
               />
             </div>
             <p className="text-sm text-muted-foreground">
-              {device.model ?? "Qingping Air Monitor"}
+              {device.model ?? "Qingping"}
             </p>
           </div>
         </div>

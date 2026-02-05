@@ -46,6 +46,11 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      by_provider_and_providerDeviceId: [
+        "provider",
+        "providerDeviceId",
+        "_creationTime",
+      ];
       by_userId_and_provider_and_providerDeviceId: [
         "userId",
         "provider",
@@ -58,17 +63,22 @@ export type DataModel = {
   };
   devices: {
     document: {
+      awaitingPostChangeReading?: boolean;
       createdAt: number;
       dashboardMetrics?: Array<string>;
       hiddenMetrics?: Array<string>;
+      intervalChangeAt?: number;
       lastBattery?: number;
       lastReadingAt?: number;
       model?: string;
       name: string;
+      primaryMetrics?: Array<string>;
       provider: "qingping" | "purpleair" | "iqair" | "temtop";
       providerDeviceId: string;
       providerOffline?: boolean;
+      reportInterval?: number;
       roomId?: Id<"rooms">;
+      secondaryMetrics?: Array<string>;
       timezone?: string;
       userId: Id<"users">;
       _id: Id<"devices">;
@@ -77,17 +87,22 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "awaitingPostChangeReading"
       | "createdAt"
       | "dashboardMetrics"
       | "hiddenMetrics"
+      | "intervalChangeAt"
       | "lastBattery"
       | "lastReadingAt"
       | "model"
       | "name"
+      | "primaryMetrics"
       | "provider"
       | "providerDeviceId"
       | "providerOffline"
+      | "reportInterval"
       | "roomId"
+      | "secondaryMetrics"
       | "timezone"
       | "userId";
     indexes: {
@@ -133,6 +148,30 @@ export type DataModel = {
       by_deviceId: ["deviceId", "_creationTime"];
       by_token: ["token", "_creationTime"];
       by_userId: ["userId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  intervalChanges: {
+    document: {
+      changedAt: number;
+      deviceId: Id<"devices">;
+      newInterval: number;
+      previousInterval: number;
+      _id: Id<"intervalChanges">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "changedAt"
+      | "deviceId"
+      | "newInterval"
+      | "previousInterval";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_deviceId: ["deviceId", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};
@@ -215,6 +254,7 @@ export type DataModel = {
       battery?: number;
       co2?: number;
       deviceId: Id<"devices">;
+      deviceName?: string;
       pm10?: number;
       pm25?: number;
       pressure?: number;
@@ -232,6 +272,7 @@ export type DataModel = {
       | "battery"
       | "co2"
       | "deviceId"
+      | "deviceName"
       | "pm10"
       | "pm25"
       | "pressure"

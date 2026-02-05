@@ -33,13 +33,26 @@ export default defineSchema({
     providerOffline: v.optional(v.boolean()),
     hiddenMetrics: v.optional(v.array(v.string())),
     dashboardMetrics: v.optional(v.array(v.string())),
+    primaryMetrics: v.optional(v.array(v.string())),   // max 2 - hero gauges
+    secondaryMetrics: v.optional(v.array(v.string())), // max 6 - compact rows
+    intervalChangeAt: v.optional(v.number()),
+    awaitingPostChangeReading: v.optional(v.boolean()),
+    reportInterval: v.optional(v.number()),
     createdAt: v.number(),
   })
     .index("by_userId", ["userId"])
     .index("by_provider_and_providerDeviceId", ["provider", "providerDeviceId"]),
 
+  intervalChanges: defineTable({
+    deviceId: v.id("devices"),
+    previousInterval: v.number(),
+    newInterval: v.number(),
+    changedAt: v.number(),
+  }).index("by_deviceId", ["deviceId"]),
+
   readings: defineTable({
     deviceId: v.id("devices"),
+    deviceName: v.optional(v.string()),
     ts: v.number(),
     pm25: v.optional(v.number()),
     pm10: v.optional(v.number()),
@@ -102,9 +115,11 @@ export default defineSchema({
     provider: providerValidator,
     providerDeviceId: v.string(),
     deletedAt: v.number(),
-  }).index("by_userId_and_provider_and_providerDeviceId", [
+  })
+    .index("by_userId_and_provider_and_providerDeviceId", [
     "userId",
     "provider",
     "providerDeviceId",
-  ]),
+    ])
+    .index("by_provider_and_providerDeviceId", ["provider", "providerDeviceId"]),
 });
