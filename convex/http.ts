@@ -39,19 +39,6 @@ http.route({
     );
 
     if (!deviceInfo) {
-      const deletedDevice = await ctx.runQuery(
-        internal.devices.isDeletedByProviderDeviceId,
-        {
-          provider: "qingping",
-          providerDeviceId: mac,
-        },
-      );
-
-      if (deletedDevice) {
-        console.warn(`[WEBHOOK] Deleted device MAC: ${mac}`);
-        return new Response("Deleted device", { status: 200 });
-      }
-
       console.warn(`[WEBHOOK] Unknown device MAC: ${mac}`);
       return new Response("Unknown device", { status: 404 });
     }

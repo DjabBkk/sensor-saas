@@ -641,6 +641,15 @@ export declare const internal: {
       },
       boolean
     >;
+    removeDeletedDevice: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        provider: "qingping" | "purpleair" | "iqair" | "temtop";
+        providerDeviceId: string;
+      },
+      null
+    >;
     updateReportInterval: FunctionReference<
       "mutation",
       "internal",

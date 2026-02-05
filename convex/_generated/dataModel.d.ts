@@ -46,6 +46,11 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      by_provider_and_providerDeviceId: [
+        "provider",
+        "providerDeviceId",
+        "_creationTime",
+      ];
       by_userId_and_provider_and_providerDeviceId: [
         "userId",
         "provider",

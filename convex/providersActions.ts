@@ -346,6 +346,8 @@ export const unbindQingpingDeviceForDeviceId = internalAction({
     try {
       await unbindDevice(accessToken, args.mac);
       console.log(`[QINGPING] Successfully unbound device ${args.mac}`);
+      // Note: We do NOT remove the deletedDevices entry here.
+      // It will be removed when the user explicitly re-adds the device via addByMac.
     } catch (error) {
       console.error(`[QINGPING] Failed to unbind device ${args.mac}:`, error);
     }
@@ -574,18 +576,6 @@ export const pollAllReadings = internalAction({
       }
 
       for (const device of devices) {
-        const isDeleted: boolean = await ctx.runQuery(
-          internal.devices.isDeletedForUser,
-          {
-            userId: config.userId,
-            provider: config.provider,
-            providerDeviceId: device.info.mac,
-          },
-        );
-        if (isDeleted) {
-          continue;
-        }
-
         const reading = mapQingpingReading(device.data);
         if (!reading) {
           continue;

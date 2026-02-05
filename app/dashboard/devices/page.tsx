@@ -17,7 +17,6 @@ import {
   getHumidityLevel,
   getBatteryLevel,
 } from "@/lib/aqi-levels";
-import { ChevronRight } from "lucide-react";
 
 export default function DevicesPage() {
   const { isLoaded, userId } = useAuth();
@@ -146,8 +145,6 @@ function DeviceRow({ device }: { device: Device }) {
           <MetricCell label="Battery" value={reading?.battery} unit="%" level={batteryLevel} />
         </div>
 
-        {/* Arrow */}
-        <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 ml-2" />
       </div>
     </Link>
   );

@@ -441,7 +441,7 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
               />
             </div>
             <p className="text-sm text-muted-foreground">
-              {device.model ?? "Qingping Air Monitor"}
+              {device.model ?? "Qingping"}
             </p>
           </div>
         </div>

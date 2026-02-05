@@ -129,13 +129,9 @@ export const deleteDevice = mutation({
       throw new Error("Device not found");
     }
 
-    if (device.provider === "qingping") {
-      await ctx.scheduler.runAfter(
-        0,
-        internal.providersActions.unbindQingpingDeviceForDeviceId,
-        { userId: device.userId, mac: device.providerDeviceId },
-      );
-    }
+    // Note: We intentionally do NOT unbind the device from Qingping's cloud.
+    // This allows users to re-add the device without needing to re-bind via the Qingping+ app.
+    // The deletedDevices entry prevents automatic re-sync until the user explicitly re-adds.
 
     const existingDeleted = await ctx.db
       .query("deletedDevices")
@@ -403,6 +399,28 @@ export const isDeletedByProviderDeviceId = internalQuery({
       )
       .first();
     return Boolean(existing);
+  },
+});
+
+export const removeDeletedDevice = internalMutation({
+  args: {
+    provider: providerValidator,
+    providerDeviceId: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("deletedDevices")
+      .withIndex("by_provider_and_providerDeviceId", (q) =>
+        q.eq("provider", args.provider).eq("providerDeviceId", args.providerDeviceId),
+      )
+      .first();
+
+    if (existing) {
+      await ctx.db.delete(existing._id);
+    }
+
+    return null;
   },
 });
 

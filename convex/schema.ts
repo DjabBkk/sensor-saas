@@ -113,9 +113,11 @@ export default defineSchema({
     provider: providerValidator,
     providerDeviceId: v.string(),
     deletedAt: v.number(),
-  }).index("by_userId_and_provider_and_providerDeviceId", [
+  })
+    .index("by_userId_and_provider_and_providerDeviceId", [
     "userId",
     "provider",
     "providerDeviceId",
-  ]),
+    ])
+    .index("by_provider_and_providerDeviceId", ["provider", "providerDeviceId"]),
 });
