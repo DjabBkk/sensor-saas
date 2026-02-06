@@ -1,7 +1,7 @@
 import { query, mutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { getDefaultRefreshInterval, isValidRefreshInterval } from "./lib/planLimits";
+import { getDefaultRefreshInterval, getMinRefreshInterval, getPlanLimits, isValidRefreshInterval } from "./lib/planLimits";
 
 const embedTokenShape = v.object({
   _id: v.id("embedTokens"),
@@ -60,18 +60,53 @@ export const create = mutation({
   },
   returns: embedTokenShape,
   handler: async (ctx, args) => {
-    // Get user plan to validate refresh interval
+    // Get user plan to validate limits
     const user = await ctx.db.get(args.userId);
     if (!user) {
       throw new Error("User not found.");
     }
 
+    // Enforce widget/kiosk limit
+    const limits = getPlanLimits(user.plan);
+    if (limits.sharedWidgetKioskLimit !== null) {
+      // Shared limit: count widgets + kiosks combined
+      const allUserTokens = await ctx.db
+        .query("embedTokens")
+        .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+        .collect();
+      const activeWidgets = allUserTokens.filter((t) => !t.isRevoked).length;
+      const allUserKiosks = await ctx.db
+        .query("kioskConfigs")
+        .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+        .collect();
+      const activeKiosks = allUserKiosks.filter((k) => !k.isRevoked).length;
+      if (activeWidgets + activeKiosks >= limits.sharedWidgetKioskLimit) {
+        throw new Error(
+          `You've reached the maximum of ${limits.sharedWidgetKioskLimit} widget or kiosk on your ${user.plan} plan. Upgrade to add more.`
+        );
+      }
+    } else if (limits.maxWidgets !== Infinity) {
+      // Separate per-type limit
+      const allUserTokens = await ctx.db
+        .query("embedTokens")
+        .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+        .collect();
+      const activeCount = allUserTokens.filter((t) => !t.isRevoked).length;
+      if (activeCount >= limits.maxWidgets) {
+        throw new Error(
+          `You've reached the maximum of ${limits.maxWidgets} widget${limits.maxWidgets === 1 ? "" : "s"} on your ${user.plan} plan. Upgrade to add more.`
+        );
+      }
+    }
+
     // Validate refresh interval if provided
     if (args.refreshInterval !== undefined) {
       if (!isValidRefreshInterval(user.plan, args.refreshInterval)) {
-        throw new Error(
-          `Refresh interval must be between ${Math.floor(getDefaultRefreshInterval(user.plan) / 60)} minutes and 60 minutes for your plan.`
-        );
+        const minMinutes = Math.floor(getMinRefreshInterval(user.plan) / 60);
+        const msg = minMinutes === 60
+          ? `Refresh interval must be 60 minutes for your ${user.plan} plan.`
+          : `Refresh interval must be between ${minMinutes} minutes and 60 minutes for your ${user.plan} plan.`;
+        throw new Error(msg);
       }
     }
 
@@ -162,9 +197,11 @@ export const updateRefreshInterval = mutation({
 
     // Validate refresh interval
     if (!isValidRefreshInterval(user.plan, args.refreshInterval)) {
-      throw new Error(
-        `Refresh interval must be between ${Math.floor(getDefaultRefreshInterval(user.plan) / 60)} minutes and 60 minutes for your plan.`
-      );
+      const minMinutes = Math.floor(getMinRefreshInterval(user.plan) / 60);
+      const msg = minMinutes === 60
+        ? `Refresh interval must be 60 minutes for your ${user.plan} plan.`
+        : `Refresh interval must be between ${minMinutes} minutes and 60 minutes for your ${user.plan} plan.`;
+      throw new Error(msg);
     }
 
     await ctx.db.patch(args.tokenId, {

@@ -1,5 +1,6 @@
 import { query, mutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
+import { getMinRefreshInterval, getPlanLimits, isValidRefreshInterval } from "./lib/planLimits";
 
 const kioskConfigShape = v.object({
   _id: v.id("kioskConfigs"),
@@ -48,6 +49,54 @@ export const create = mutation({
   },
   returns: kioskConfigShape,
   handler: async (ctx, args) => {
+    // Get user plan to validate limits
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      throw new Error("User not found.");
+    }
+
+    // Enforce kiosk/widget limit
+    const limits = getPlanLimits(user.plan);
+    if (limits.sharedWidgetKioskLimit !== null) {
+      // Shared limit: count kiosks + widgets combined
+      const allUserKiosks = await ctx.db
+        .query("kioskConfigs")
+        .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+        .collect();
+      const activeKiosks = allUserKiosks.filter((k) => !k.isRevoked).length;
+      const allUserTokens = await ctx.db
+        .query("embedTokens")
+        .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+        .collect();
+      const activeWidgets = allUserTokens.filter((t) => !t.isRevoked).length;
+      if (activeKiosks + activeWidgets >= limits.sharedWidgetKioskLimit) {
+        throw new Error(
+          `You've reached the maximum of ${limits.sharedWidgetKioskLimit} widget or kiosk on your ${user.plan} plan. Upgrade to add more.`
+        );
+      }
+    } else if (limits.maxKiosks !== Infinity) {
+      // Separate per-type limit
+      const allUserKiosks = await ctx.db
+        .query("kioskConfigs")
+        .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+        .collect();
+      const activeCount = allUserKiosks.filter((k) => !k.isRevoked).length;
+      if (activeCount >= limits.maxKiosks) {
+        throw new Error(
+          `You've reached the maximum of ${limits.maxKiosks} kiosk${limits.maxKiosks === 1 ? "" : "s"} on your ${user.plan} plan. Upgrade to add more.`
+        );
+      }
+    }
+
+    // Validate refresh interval
+    if (!isValidRefreshInterval(user.plan, args.refreshInterval)) {
+      const minMinutes = Math.floor(getMinRefreshInterval(user.plan) / 60);
+      const msg = minMinutes === 60
+        ? `Refresh interval must be 60 minutes for your ${user.plan} plan.`
+        : `Refresh interval must be between ${minMinutes} minutes and 60 minutes for your ${user.plan} plan.`;
+      throw new Error(msg);
+    }
+
     let token = generateToken();
     let existing = await ctx.db
       .query("kioskConfigs")

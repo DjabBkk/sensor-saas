@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, use } from "react";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -12,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getDeviceStatus } from "@/lib/deviceStatus";
+import { getPlanLimits } from "@/convex/lib/planLimits";
 import { BadgeSmall } from "@/components/embed/BadgeSmall";
 import { BadgeMedium } from "@/components/embed/BadgeMedium";
 import { BadgeLarge } from "@/components/embed/BadgeLarge";
@@ -103,11 +105,39 @@ export default function DeviceEmbedPage({
     api.users.getCurrentUser,
     userId ? { authId: userId } : "skip"
   );
+  const allUserTokens = useQuery(
+    api.embedTokens.listForUser,
+    convexUserId ? { userId: convexUserId } : "skip",
+  );
+  const allUserKiosks = useQuery(
+    api.kioskConfigs.listForUser,
+    convexUserId ? { userId: convexUserId } : "skip",
+  );
 
   const activeTokens = useMemo(
     () => (tokens ?? []).filter((token) => !token.isRevoked),
     [tokens],
   );
+
+  // Widget limit enforcement — shared or per-type
+  const allActiveTokenCount = useMemo(
+    () => (allUserTokens ?? []).filter((t) => !t.isRevoked).length,
+    [allUserTokens],
+  );
+  const activeKioskCount = useMemo(
+    () => (allUserKiosks ?? []).filter((k) => !k.isRevoked).length,
+    [allUserKiosks],
+  );
+  const planLimits = convexUser?.plan ? getPlanLimits(convexUser.plan) : null;
+  const isSharedLimit = planLimits?.sharedWidgetKioskLimit !== null && planLimits?.sharedWidgetKioskLimit !== undefined;
+  const combinedCount = allActiveTokenCount + activeKioskCount;
+  const displayLimit = isSharedLimit
+    ? planLimits!.sharedWidgetKioskLimit!
+    : planLimits?.maxWidgets ?? null;
+  const displayCount = isSharedLimit ? combinedCount : allActiveTokenCount;
+  const atWidgetLimit =
+    displayLimit !== null && displayLimit !== Infinity && displayCount >= displayLimit;
+  const limitLabel = isSharedLimit ? "widgets & kiosks" : "widgets";
 
   useEffect(() => {
     if (activeTokens.length && !selectedTokenId) {
@@ -254,9 +284,25 @@ export default function DeviceEmbedPage({
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Create an embed token</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle>Create an embed token</CardTitle>
+                {displayLimit !== null && (
+                  <span className="text-sm text-muted-foreground">
+                    {displayCount}/{displayLimit === Infinity ? "\u221E" : displayLimit} {limitLabel}
+                  </span>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {atWidgetLimit && (
+                <div className="rounded-md border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm">
+                  You&apos;ve reached your {limitLabel} limit.{" "}
+                  <Link href="/dashboard/account" className="font-medium underline">
+                    Upgrade your plan
+                  </Link>{" "}
+                  to create more.
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="label">Label (optional)</Label>
                 <Input
@@ -264,6 +310,7 @@ export default function DeviceEmbedPage({
                   value={label}
                   onChange={(event) => setLabel(event.target.value)}
                   placeholder="Lobby screen, Website badge, etc."
+                  disabled={atWidgetLimit}
                 />
               </div>
               <div className="space-y-2">
@@ -273,10 +320,13 @@ export default function DeviceEmbedPage({
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
                   placeholder="Air Quality at Sprouts Kindergarten"
+                  disabled={atWidgetLimit}
                 />
               </div>
               {error ? <p className="text-sm text-red-500">{error}</p> : null}
-              <Button onClick={handleCreate}>Create Token</Button>
+              <Button onClick={handleCreate} disabled={atWidgetLimit}>
+                Create Token
+              </Button>
             </CardContent>
           </Card>
 

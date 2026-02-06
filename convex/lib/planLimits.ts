@@ -4,6 +4,7 @@ export type PlanLimits = {
   maxDevices: number;
   maxWidgets: number;
   maxKiosks: number;
+  sharedWidgetKioskLimit: number | null; // when set, widgets + kiosks share this combined limit
   minReportInterval: number; // seconds (most frequent allowed)
   maxReportInterval: number; // seconds (least frequent allowed)
   defaultReportInterval: number; // seconds
@@ -18,6 +19,7 @@ const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     maxDevices: 1,
     maxWidgets: 1,
     maxKiosks: 1,
+    sharedWidgetKioskLimit: 1, // 1 widget OR kiosk total
     minReportInterval: 3600, // 60 min
     maxReportInterval: 3600, // 60 min
     defaultReportInterval: 3600, // 60 min
@@ -30,6 +32,7 @@ const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     maxDevices: 3,
     maxWidgets: 3,
     maxKiosks: 3,
+    sharedWidgetKioskLimit: null,
     minReportInterval: 1800, // 30 min
     maxReportInterval: 3600, // 60 min
     defaultReportInterval: 1800, // 30 min
@@ -42,6 +45,7 @@ const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     maxDevices: 20,
     maxWidgets: Infinity,
     maxKiosks: Infinity,
+    sharedWidgetKioskLimit: null,
     minReportInterval: 300, // 5 min
     maxReportInterval: 3600, // 60 min
     defaultReportInterval: 300, // 5 min
@@ -54,6 +58,7 @@ const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     maxDevices: 100,
     maxWidgets: Infinity,
     maxKiosks: Infinity,
+    sharedWidgetKioskLimit: null,
     minReportInterval: 60, // 1 min
     maxReportInterval: 3600, // 60 min
     defaultReportInterval: 60, // 1 min
@@ -100,6 +105,20 @@ export function getDefaultRefreshInterval(plan: Plan): number {
  */
 export function getMaxDevices(plan: Plan): number {
   return getPlanLimits(plan).maxDevices;
+}
+
+/**
+ * Get the maximum number of widgets (embed tokens) allowed for a plan.
+ */
+export function getMaxWidgets(plan: Plan): number {
+  return getPlanLimits(plan).maxWidgets;
+}
+
+/**
+ * Get the maximum number of kiosks allowed for a plan.
+ */
+export function getMaxKiosks(plan: Plan): number {
+  return getPlanLimits(plan).maxKiosks;
 }
 
 /**

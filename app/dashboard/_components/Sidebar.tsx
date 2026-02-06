@@ -62,7 +62,7 @@ type SidebarProps = {
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/devices", label: "Devices", icon: Cpu },
-  { href: "/dashboard/kiosk", label: "Kiosk", icon: Monitor, comingSoon: true },
+  { href: "/dashboard/kiosk", label: "Kiosk", icon: Monitor },
   { href: "/dashboard/widgets", label: "Widgets", icon: Code },
 ];
 
