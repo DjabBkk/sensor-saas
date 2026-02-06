@@ -9,6 +9,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatNumber, getCO2Level, getPM25Level, getTemperatureLevel, getHumidityLevel } from "./utils";
+import { type BrandingProps, BrandLogo, PoweredByWatermark } from "./Branding";
 
 type HistoryPoint = {
   ts: number;
@@ -23,6 +24,7 @@ type CardLargeProps = {
   tempC?: number;
   rh?: number;
   history: HistoryPoint[];
+  branding?: BrandingProps;
 };
 
 export function CardLarge({
@@ -33,6 +35,7 @@ export function CardLarge({
   tempC,
   rh,
   history,
+  branding,
 }: CardLargeProps) {
   const displayPm25 = isOnline ? pm25 : undefined;
   const displayCo2 = isOnline ? co2 : undefined;
@@ -56,10 +59,23 @@ export function CardLarge({
     }));
 
   return (
-    <Card className="w-full max-w-md">
+    <Card
+      className="w-full max-w-md"
+      style={{
+        borderColor: branding?.brandColor ?? undefined,
+      }}
+    >
       <CardHeader className="space-y-1">
         <div className="flex items-center justify-between gap-2">
-          {title && <CardTitle className="text-xl">{title}</CardTitle>}
+          <div className="flex min-w-0 items-center gap-2">
+            <BrandLogo logoUrl={branding?.logoUrl} brandName={branding?.brandName} />
+            <div className="min-w-0">
+              {title && <CardTitle className="text-xl">{title}</CardTitle>}
+              {branding?.brandName && (
+                <p className="truncate text-xs text-muted-foreground">{branding.brandName}</p>
+              )}
+            </div>
+          </div>
           {!isOnline && <Badge variant="secondary">Offline</Badge>}
         </div>
       </CardHeader>
@@ -118,13 +134,15 @@ export function CardLarge({
               <Line
                 type="monotone"
                 dataKey="pm25"
-                stroke="#10b981"
+                stroke={branding?.brandColor ?? "#10b981"}
                 strokeWidth={2}
                 dot={false}
               />
             </LineChart>
           </ResponsiveContainer>
         </div>
+
+        <PoweredByWatermark hide={branding?.hideAirViewBranding} />
       </CardContent>
     </Card>
   );

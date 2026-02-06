@@ -14,6 +14,11 @@ const kioskConfigShape = v.object({
   theme: v.union(v.literal("dark"), v.literal("light")),
   refreshInterval: v.number(),
   visibleMetrics: v.optional(v.array(v.string())),
+  // Branding (Pro+ plan)
+  brandName: v.optional(v.string()),
+  brandColor: v.optional(v.string()),
+  logoStorageId: v.optional(v.id("_storage")),
+  hideAirViewBranding: v.optional(v.boolean()),
   isRevoked: v.boolean(),
   createdAt: v.number(),
 });
@@ -46,6 +51,11 @@ export const create = mutation({
     theme: v.union(v.literal("dark"), v.literal("light")),
     refreshInterval: v.number(),
     visibleMetrics: v.optional(v.array(v.string())),
+    // Branding (Pro+ plan)
+    brandName: v.optional(v.string()),
+    brandColor: v.optional(v.string()),
+    logoStorageId: v.optional(v.id("_storage")),
+    hideAirViewBranding: v.optional(v.boolean()),
   },
   returns: kioskConfigShape,
   handler: async (ctx, args) => {
@@ -88,6 +98,14 @@ export const create = mutation({
       }
     }
 
+    // Validate branding fields require Pro+ plan
+    const hasBranding = args.brandName || args.brandColor || args.logoStorageId || args.hideAirViewBranding;
+    if (hasBranding && !limits.customBranding) {
+      throw new Error(
+        `Custom branding is not available on your ${user.plan} plan. Upgrade to Pro or higher.`,
+      );
+    }
+
     // Validate refresh interval
     if (!isValidRefreshInterval(user.plan, args.refreshInterval)) {
       const minMinutes = Math.floor(getMinRefreshInterval(user.plan) / 60);
@@ -127,6 +145,10 @@ export const create = mutation({
       theme: args.theme,
       refreshInterval: args.refreshInterval,
       visibleMetrics: args.visibleMetrics,
+      brandName: args.brandName,
+      brandColor: args.brandColor,
+      logoStorageId: args.logoStorageId,
+      hideAirViewBranding: args.hideAirViewBranding,
       isRevoked: false,
       createdAt: Date.now(),
     });
@@ -149,9 +171,31 @@ export const update = mutation({
     theme: v.union(v.literal("dark"), v.literal("light")),
     refreshInterval: v.number(),
     visibleMetrics: v.optional(v.array(v.string())),
+    // Branding (Pro+ plan)
+    brandName: v.optional(v.string()),
+    brandColor: v.optional(v.string()),
+    logoStorageId: v.optional(v.id("_storage")),
+    hideAirViewBranding: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    // Validate branding fields require Pro+ plan
+    const hasBranding = args.brandName || args.brandColor || args.logoStorageId || args.hideAirViewBranding;
+    if (hasBranding) {
+      const config = await ctx.db.get(args.configId);
+      if (config) {
+        const user = await ctx.db.get(config.userId);
+        if (user) {
+          const limits = getPlanLimits(user.plan);
+          if (!limits.customBranding) {
+            throw new Error(
+              `Custom branding is not available on your ${user.plan} plan. Upgrade to Pro or higher.`,
+            );
+          }
+        }
+      }
+    }
+
     await ctx.db.patch(args.configId, {
       label: args.label,
       title: args.title,
@@ -160,6 +204,10 @@ export const update = mutation({
       theme: args.theme,
       refreshInterval: args.refreshInterval,
       visibleMetrics: args.visibleMetrics,
+      brandName: args.brandName,
+      brandColor: args.brandColor,
+      logoStorageId: args.logoStorageId,
+      hideAirViewBranding: args.hideAirViewBranding,
     });
     return null;
   },

@@ -13,6 +13,11 @@ const embedTokenShape = v.object({
   description: v.optional(v.string()),
   size: v.optional(v.union(v.literal("small"), v.literal("medium"), v.literal("large"))),
   refreshInterval: v.optional(v.number()),
+  // Branding (Pro+ plan)
+  brandName: v.optional(v.string()),
+  brandColor: v.optional(v.string()),
+  logoStorageId: v.optional(v.id("_storage")),
+  hideAirViewBranding: v.optional(v.boolean()),
   isRevoked: v.boolean(),
   createdAt: v.number(),
 });
@@ -57,6 +62,11 @@ export const create = mutation({
     description: v.optional(v.string()),
     size: v.optional(v.union(v.literal("small"), v.literal("medium"), v.literal("large"))),
     refreshInterval: v.optional(v.number()),
+    // Branding (Pro+ plan)
+    brandName: v.optional(v.string()),
+    brandColor: v.optional(v.string()),
+    logoStorageId: v.optional(v.id("_storage")),
+    hideAirViewBranding: v.optional(v.boolean()),
   },
   returns: embedTokenShape,
   handler: async (ctx, args) => {
@@ -110,6 +120,14 @@ export const create = mutation({
       }
     }
 
+    // Validate branding fields require Pro+ plan
+    const hasBranding = args.brandName || args.brandColor || args.logoStorageId || args.hideAirViewBranding;
+    if (hasBranding && !limits.customBranding) {
+      throw new Error(
+        `Custom branding is not available on your ${user.plan} plan. Upgrade to Pro or higher.`,
+      );
+    }
+
     // Use provided interval or default based on plan
     const refreshInterval = args.refreshInterval ?? getDefaultRefreshInterval(user.plan);
 
@@ -141,6 +159,10 @@ export const create = mutation({
       description: args.description,
       size: args.size,
       refreshInterval,
+      brandName: args.brandName,
+      brandColor: args.brandColor,
+      logoStorageId: args.logoStorageId,
+      hideAirViewBranding: args.hideAirViewBranding,
       isRevoked: false,
       createdAt: Date.now(),
     });
@@ -174,6 +196,48 @@ export const getByToken = internalQuery({
       .query("embedTokens")
       .withIndex("by_token", (q) => q.eq("token", args.token))
       .unique();
+  },
+});
+
+export const updateBranding = mutation({
+  args: {
+    tokenId: v.id("embedTokens"),
+    brandName: v.optional(v.string()),
+    brandColor: v.optional(v.string()),
+    logoStorageId: v.optional(v.id("_storage")),
+    hideAirViewBranding: v.optional(v.boolean()),
+  },
+  returns: embedTokenShape,
+  handler: async (ctx, args) => {
+    const token = await ctx.db.get(args.tokenId);
+    if (!token || token.isRevoked) {
+      throw new Error("Token not found or revoked.");
+    }
+
+    const user = await ctx.db.get(token.userId);
+    if (!user) {
+      throw new Error("User not found.");
+    }
+
+    const limits = getPlanLimits(user.plan);
+    if (!limits.customBranding) {
+      throw new Error(
+        `Custom branding is not available on your ${user.plan} plan. Upgrade to Pro or higher.`,
+      );
+    }
+
+    await ctx.db.patch(args.tokenId, {
+      brandName: args.brandName,
+      brandColor: args.brandColor,
+      logoStorageId: args.logoStorageId,
+      hideAirViewBranding: args.hideAirViewBranding,
+    });
+
+    const updated = await ctx.db.get(args.tokenId);
+    if (!updated) {
+      throw new Error("Failed to update branding.");
+    }
+    return updated;
   },
 });
 

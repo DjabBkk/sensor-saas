@@ -141,9 +141,13 @@ export declare const api: {
       "mutation",
       "public",
       {
+        brandColor?: string;
+        brandName?: string;
         description?: string;
         deviceId: Id<"devices">;
+        hideAirViewBranding?: boolean;
         label?: string;
+        logoStorageId?: Id<"_storage">;
         refreshInterval?: number;
         size?: "small" | "medium" | "large";
         userId: Id<"users">;
@@ -151,11 +155,15 @@ export declare const api: {
       {
         _creationTime: number;
         _id: Id<"embedTokens">;
+        brandColor?: string;
+        brandName?: string;
         createdAt: number;
         description?: string;
         deviceId: Id<"devices">;
+        hideAirViewBranding?: boolean;
         isRevoked: boolean;
         label?: string;
+        logoStorageId?: Id<"_storage">;
         refreshInterval?: number;
         size?: "small" | "medium" | "large";
         token: string;
@@ -169,11 +177,15 @@ export declare const api: {
       Array<{
         _creationTime: number;
         _id: Id<"embedTokens">;
+        brandColor?: string;
+        brandName?: string;
         createdAt: number;
         description?: string;
         deviceId: Id<"devices">;
+        hideAirViewBranding?: boolean;
         isRevoked: boolean;
         label?: string;
+        logoStorageId?: Id<"_storage">;
         refreshInterval?: number;
         size?: "small" | "medium" | "large";
         token: string;
@@ -187,11 +199,15 @@ export declare const api: {
       Array<{
         _creationTime: number;
         _id: Id<"embedTokens">;
+        brandColor?: string;
+        brandName?: string;
         createdAt: number;
         description?: string;
         deviceId: Id<"devices">;
+        hideAirViewBranding?: boolean;
         isRevoked: boolean;
         label?: string;
+        logoStorageId?: Id<"_storage">;
         refreshInterval?: number;
         size?: "small" | "medium" | "large";
         token: string;
@@ -204,6 +220,34 @@ export declare const api: {
       { tokenId: Id<"embedTokens"> },
       null
     >;
+    updateBranding: FunctionReference<
+      "mutation",
+      "public",
+      {
+        brandColor?: string;
+        brandName?: string;
+        hideAirViewBranding?: boolean;
+        logoStorageId?: Id<"_storage">;
+        tokenId: Id<"embedTokens">;
+      },
+      {
+        _creationTime: number;
+        _id: Id<"embedTokens">;
+        brandColor?: string;
+        brandName?: string;
+        createdAt: number;
+        description?: string;
+        deviceId: Id<"devices">;
+        hideAirViewBranding?: boolean;
+        isRevoked: boolean;
+        label?: string;
+        logoStorageId?: Id<"_storage">;
+        refreshInterval?: number;
+        size?: "small" | "medium" | "large";
+        token: string;
+        userId: Id<"users">;
+      }
+    >;
     updateRefreshInterval: FunctionReference<
       "mutation",
       "public",
@@ -211,11 +255,15 @@ export declare const api: {
       {
         _creationTime: number;
         _id: Id<"embedTokens">;
+        brandColor?: string;
+        brandName?: string;
         createdAt: number;
         description?: string;
         deviceId: Id<"devices">;
+        hideAirViewBranding?: boolean;
         isRevoked: boolean;
         label?: string;
+        logoStorageId?: Id<"_storage">;
         refreshInterval?: number;
         size?: "small" | "medium" | "large";
         token: string;
@@ -243,8 +291,12 @@ export declare const api: {
       "mutation",
       "public",
       {
+        brandColor?: string;
+        brandName?: string;
         deviceIds: Array<Id<"devices">>;
+        hideAirViewBranding?: boolean;
         label?: string;
+        logoStorageId?: Id<"_storage">;
         mode: "single" | "multi";
         refreshInterval: number;
         theme: "dark" | "light";
@@ -255,10 +307,14 @@ export declare const api: {
       {
         _creationTime: number;
         _id: Id<"kioskConfigs">;
+        brandColor?: string;
+        brandName?: string;
         createdAt: number;
         deviceIds: Array<Id<"devices">>;
+        hideAirViewBranding?: boolean;
         isRevoked: boolean;
         label?: string;
+        logoStorageId?: Id<"_storage">;
         mode: "single" | "multi";
         refreshInterval: number;
         theme: "dark" | "light";
@@ -275,10 +331,14 @@ export declare const api: {
       Array<{
         _creationTime: number;
         _id: Id<"kioskConfigs">;
+        brandColor?: string;
+        brandName?: string;
         createdAt: number;
         deviceIds: Array<Id<"devices">>;
+        hideAirViewBranding?: boolean;
         isRevoked: boolean;
         label?: string;
+        logoStorageId?: Id<"_storage">;
         mode: "single" | "multi";
         refreshInterval: number;
         theme: "dark" | "light";
@@ -298,9 +358,13 @@ export declare const api: {
       "mutation",
       "public",
       {
+        brandColor?: string;
+        brandName?: string;
         configId: Id<"kioskConfigs">;
         deviceIds: Array<Id<"devices">>;
+        hideAirViewBranding?: boolean;
         label?: string;
+        logoStorageId?: Id<"_storage">;
         mode: "single" | "multi";
         refreshInterval: number;
         theme: "dark" | "light";
@@ -376,7 +440,11 @@ export declare const api: {
           userId: Id<"users">;
         };
         embed: {
+          brandColor?: string;
+          brandName?: string;
           description?: string;
+          hideAirViewBranding?: boolean;
+          logoUrl?: string;
           refreshInterval?: number;
           size?: "small" | "medium" | "large";
         };
@@ -417,6 +485,8 @@ export declare const api: {
       "public",
       { refreshKey?: number; token: string },
       null | {
+        brandColor?: string;
+        brandName?: string;
         devices: Array<{
           device: {
             _creationTime: number;
@@ -449,7 +519,9 @@ export declare const api: {
             voc?: number;
           };
         }>;
+        hideAirViewBranding?: boolean;
         label?: string;
+        logoUrl?: string;
         mode: "single" | "multi";
         refreshInterval: number;
         theme: "dark" | "light";
@@ -605,7 +677,27 @@ export declare const api: {
       null
     >;
   };
+  storage: {
+    generateUploadUrl: FunctionReference<
+      "mutation",
+      "public",
+      { userId: Id<"users"> },
+      string
+    >;
+    getLogoUrl: FunctionReference<
+      "query",
+      "public",
+      { storageId: Id<"_storage"> },
+      string | null
+    >;
+  };
   users: {
+    debugSetPlan: FunctionReference<
+      "mutation",
+      "public",
+      { plan: "starter" | "pro" | "business" | "custom"; userId: Id<"users"> },
+      null
+    >;
     deleteUser: FunctionReference<
       "mutation",
       "public",
@@ -759,11 +851,15 @@ export declare const internal: {
       null | {
         _creationTime: number;
         _id: Id<"embedTokens">;
+        brandColor?: string;
+        brandName?: string;
         createdAt: number;
         description?: string;
         deviceId: Id<"devices">;
+        hideAirViewBranding?: boolean;
         isRevoked: boolean;
         label?: string;
+        logoStorageId?: Id<"_storage">;
         refreshInterval?: number;
         size?: "small" | "medium" | "large";
         token: string;
@@ -791,10 +887,14 @@ export declare const internal: {
       null | {
         _creationTime: number;
         _id: Id<"kioskConfigs">;
+        brandColor?: string;
+        brandName?: string;
         createdAt: number;
         deviceIds: Array<Id<"devices">>;
+        hideAirViewBranding?: boolean;
         isRevoked: boolean;
         label?: string;
+        logoStorageId?: Id<"_storage">;
         mode: "single" | "multi";
         refreshInterval: number;
         theme: "dark" | "light";

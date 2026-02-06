@@ -1,11 +1,13 @@
 import { Badge } from "@/components/ui/badge";
 import { formatNumber, getCO2Level, getPM25Level } from "./utils";
+import { type BrandingProps, BrandLogo, PoweredByWatermark } from "./Branding";
 
 type BadgeLargeProps = {
   title?: string;
   isOnline?: boolean;
   pm25?: number;
   co2?: number;
+  branding?: BrandingProps;
 };
 
 export function BadgeLarge({
@@ -13,6 +15,7 @@ export function BadgeLarge({
   isOnline = true,
   pm25,
   co2,
+  branding,
 }: BadgeLargeProps) {
   const displayPm25 = isOnline ? pm25 : undefined;
   const displayCo2 = isOnline ? co2 : undefined;
@@ -20,9 +23,20 @@ export function BadgeLarge({
   const co2Level = displayCo2 !== undefined ? getCO2Level(displayCo2) : null;
 
   return (
-    <div className="flex flex-wrap items-center gap-6 rounded-2xl border border-border bg-background px-5 py-4 text-sm text-foreground">
-      <div className="min-w-0">
-        {title && <p className="truncate text-base font-semibold">{title}</p>}
+    <div
+      className="flex flex-wrap items-center gap-6 rounded-2xl border bg-background px-5 py-4 text-sm text-foreground"
+      style={{
+        borderColor: branding?.brandColor ?? undefined,
+      }}
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <BrandLogo logoUrl={branding?.logoUrl} brandName={branding?.brandName} />
+        <div className="min-w-0">
+          {title && <p className="truncate text-base font-semibold">{title}</p>}
+          {branding?.brandName && (
+            <p className="truncate text-xs text-muted-foreground">{branding.brandName}</p>
+          )}
+        </div>
       </div>
       <div className="flex items-center gap-6">
         {!isOnline && <Badge variant="secondary">Offline</Badge>}
@@ -47,6 +61,7 @@ export function BadgeLarge({
           )}
         </div>
       </div>
+      <PoweredByWatermark hide={branding?.hideAirViewBranding} className="ml-auto" />
     </div>
   );
 }

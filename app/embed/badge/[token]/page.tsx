@@ -56,16 +56,24 @@ export default function EmbedBadgePage({
               ? sizeParam
               : data.embed.size ?? "medium";
 
+          const branding = {
+            brandName: data.embed.brandName,
+            brandColor: data.embed.brandColor,
+            logoUrl: data.embed.logoUrl,
+            hideAirViewBranding: data.embed.hideAirViewBranding,
+          };
+
           return (
             <>
               {size === "small" && (
-                <BadgeSmall isOnline={true} pm25={reading?.pm25} />
+                <BadgeSmall isOnline={true} pm25={reading?.pm25} branding={branding} />
               )}
               {size === "medium" && (
                 <BadgeMedium
                   title={data.embed.description}
                   isOnline={true}
                   pm25={reading?.pm25}
+                  branding={branding}
                 />
               )}
               {size === "large" && (
@@ -74,6 +82,7 @@ export default function EmbedBadgePage({
                   isOnline={true}
                   pm25={reading?.pm25}
                   co2={reading?.co2}
+                  branding={branding}
                 />
               )}
             </>

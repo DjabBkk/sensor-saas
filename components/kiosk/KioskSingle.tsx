@@ -1,4 +1,5 @@
 import { formatNumber, getCO2Level, getPM25Level, getTemperatureLevel, getHumidityLevel } from "@/components/embed/utils";
+import { type BrandingProps, BrandLogo, PoweredByWatermark } from "@/components/embed/Branding";
 
 type KioskSingleProps = {
   deviceName: string;
@@ -8,6 +9,7 @@ type KioskSingleProps = {
   co2?: number;
   tempC?: number;
   rh?: number;
+  branding?: BrandingProps;
 };
 
 export function KioskSingle({
@@ -18,6 +20,7 @@ export function KioskSingle({
   co2,
   tempC,
   rh,
+  branding,
 }: KioskSingleProps) {
   const displayPm25 = isOnline ? pm25 : undefined;
   const displayCo2 = isOnline ? co2 : undefined;
@@ -30,17 +33,30 @@ export function KioskSingle({
   const humidityLevel = displayRh !== undefined ? getHumidityLevel(displayRh) : null;
 
   return (
-    <div className="flex h-full w-full flex-col justify-between rounded-3xl border border-border bg-background p-10">
+    <div
+      className="flex h-full w-full flex-col justify-between rounded-3xl border bg-background p-10"
+      style={{
+        borderColor: branding?.brandColor ?? undefined,
+      }}
+    >
       <div className="space-y-2">
         <div className="flex items-center gap-3">
-          <h1 className="text-4xl font-bold">{deviceName}</h1>
+          <BrandLogo logoUrl={branding?.logoUrl} brandName={branding?.brandName} className="h-10 w-10" />
+          <div>
+            <h1 className="text-4xl font-bold">{deviceName}</h1>
+            {branding?.brandName && (
+              <p className="text-lg text-muted-foreground">{branding.brandName}</p>
+            )}
+          </div>
           {!isOnline && (
             <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
               Offline
             </span>
           )}
         </div>
-        <p className="text-lg text-muted-foreground">{model ?? "Air sensor"}</p>
+        {!branding?.brandName && (
+          <p className="text-lg text-muted-foreground">{model ?? "Air sensor"}</p>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-8">
@@ -87,6 +103,8 @@ export function KioskSingle({
           )}
         </div>
       </div>
+
+      <PoweredByWatermark hide={branding?.hideAirViewBranding} className="text-center text-xs" />
     </div>
   );
 }

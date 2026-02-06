@@ -102,6 +102,8 @@ export default function DashboardLayout({
           onAddDevice={() => setAddDeviceOpen(true)}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
+          userEmail={convexUser?.email}
+          userPlan={plan}
         />
         <main className="flex-1 overflow-auto">{children}</main>
         <AddDeviceDialog

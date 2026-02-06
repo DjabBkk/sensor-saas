@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, use } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, use } from "react";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
@@ -20,6 +20,7 @@ import { BadgeLarge } from "@/components/embed/BadgeLarge";
 import { CardSmall } from "@/components/embed/CardSmall";
 import { CardMedium } from "@/components/embed/CardMedium";
 import { CardLarge } from "@/components/embed/CardLarge";
+import { type BrandingProps } from "@/components/embed/Branding";
 import {
   Select,
   SelectContent,
@@ -45,6 +46,8 @@ export default function DeviceEmbedPage({
   const createToken = useMutation(api.embedTokens.create);
   const revokeToken = useMutation(api.embedTokens.revoke);
   const updateRefreshInterval = useMutation(api.embedTokens.updateRefreshInterval);
+  const updateBranding = useMutation(api.embedTokens.updateBranding);
+  const generateUploadUrl = useMutation(api.storage.generateUploadUrl);
 
   const [convexUserId, setConvexUserId] = useState<Id<"users"> | null>(null);
   const [label, setLabel] = useState("");
@@ -56,6 +59,15 @@ export default function DeviceEmbedPage({
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
   const [origin, setOrigin] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  // Branding state
+  const [brandName, setBrandName] = useState("");
+  const [brandColor, setBrandColor] = useState("");
+  const [logoStorageId, setLogoStorageId] = useState<Id<"_storage"> | undefined>(undefined);
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | undefined>(undefined);
+  const [hideAirViewBranding, setHideAirViewBranding] = useState(false);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -147,6 +159,12 @@ export default function DeviceEmbedPage({
 
   const selectedToken = activeTokens.find((token) => token._id === selectedTokenId);
 
+  // Query for logo URL from storage ID
+  const logoUrlFromStorage = useQuery(
+    api.storage.getLogoUrl,
+    selectedToken?.logoStorageId ? { storageId: selectedToken.logoStorageId } : "skip",
+  );
+
   useEffect(() => {
     if (!selectedToken) return;
     if (selectedToken.description !== undefined) {
@@ -158,7 +176,21 @@ export default function DeviceEmbedPage({
     if (selectedToken.refreshInterval !== undefined) {
       setRefreshInterval(selectedToken.refreshInterval);
     }
+    // Sync branding state
+    setBrandName(selectedToken.brandName ?? "");
+    setBrandColor(selectedToken.brandColor ?? "");
+    setLogoStorageId(selectedToken.logoStorageId ?? undefined);
+    setHideAirViewBranding(selectedToken.hideAirViewBranding ?? false);
   }, [selectedToken]);
+
+  // Update logo preview URL when storage query resolves
+  useEffect(() => {
+    if (logoUrlFromStorage) {
+      setLogoPreviewUrl(logoUrlFromStorage);
+    } else if (!selectedToken?.logoStorageId) {
+      setLogoPreviewUrl(undefined);
+    }
+  }, [logoUrlFromStorage, selectedToken?.logoStorageId]);
 
   // All possible refresh interval options (most frequent first)
   const ALL_REFRESH_OPTIONS = [
@@ -218,6 +250,16 @@ export default function DeviceEmbedPage({
   const previewTitle = selectedToken?.description ?? description;
   const previewHistory = history ?? [];
 
+  // Compute branding for preview
+  const previewBranding: BrandingProps = {
+    brandName: brandName || undefined,
+    brandColor: brandColor || undefined,
+    logoUrl: logoPreviewUrl,
+    hideAirViewBranding,
+  };
+
+  const canBrand = planLimits?.customBranding === true;
+
   const handleCreate = async () => {
     if (!convexUserId) {
       setError("User sync not ready yet.");
@@ -251,6 +293,54 @@ export default function DeviceEmbedPage({
       setError(err instanceof Error ? err.message : "Failed to update refresh interval.");
     }
   };
+
+  const handleLogoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !convexUserId) return;
+
+    setIsUploadingLogo(true);
+    try {
+      const uploadUrl = await generateUploadUrl({ userId: convexUserId });
+      const result = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      const { storageId } = await result.json();
+      setLogoStorageId(storageId);
+      setLogoPreviewUrl(URL.createObjectURL(file));
+
+      // Auto-save branding if a token is selected
+      if (selectedTokenId) {
+        await updateBranding({
+          tokenId: selectedTokenId as Id<"embedTokens">,
+          brandName: brandName || undefined,
+          brandColor: brandColor || undefined,
+          logoStorageId: storageId,
+          hideAirViewBranding,
+        });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to upload logo.");
+    } finally {
+      setIsUploadingLogo(false);
+    }
+  }, [convexUserId, generateUploadUrl, selectedTokenId, updateBranding, brandName, brandColor, hideAirViewBranding]);
+
+  const handleSaveBranding = useCallback(async () => {
+    if (!selectedTokenId) return;
+    try {
+      await updateBranding({
+        tokenId: selectedTokenId as Id<"embedTokens">,
+        brandName: brandName || undefined,
+        brandColor: brandColor || undefined,
+        logoStorageId: logoStorageId,
+        hideAirViewBranding,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update branding.");
+    }
+  }, [selectedTokenId, updateBranding, brandName, brandColor, logoStorageId, hideAirViewBranding]);
 
   const handleCopy = async (value: string) => {
     if (!value) return;
@@ -477,6 +567,107 @@ export default function DeviceEmbedPage({
               </div>
             </CardContent>
           </Card>
+
+          {/* Branding configuration (Pro+ plan) */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Custom branding</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!canBrand && (
+                <div className="rounded-md border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm">
+                  Custom branding is available on the Pro plan and above.{" "}
+                  <Link href="/dashboard/account" className="font-medium underline">
+                    Upgrade your plan
+                  </Link>{" "}
+                  to customize your widgets.
+                </div>
+              )}
+              <fieldset disabled={!canBrand || !selectedTokenId} className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="brandName">Brand name</Label>
+                    <Input
+                      id="brandName"
+                      value={brandName}
+                      onChange={(e) => setBrandName(e.target.value)}
+                      placeholder="Your company name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="brandColor">Brand color</Label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        id="brandColor"
+                        value={brandColor || "#10b981"}
+                        onChange={(e) => setBrandColor(e.target.value)}
+                        className="h-9 w-12 cursor-pointer rounded border border-border"
+                      />
+                      <Input
+                        value={brandColor}
+                        onChange={(e) => setBrandColor(e.target.value)}
+                        placeholder="#10b981"
+                        className="flex-1"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Logo</Label>
+                  <div className="flex items-center gap-3">
+                    {logoPreviewUrl && (
+                      <img
+                        src={logoPreviewUrl}
+                        alt="Logo preview"
+                        className="h-10 w-10 rounded border border-border object-contain"
+                      />
+                    )}
+                    <Button
+                      variant="outline"
+                      onClick={() => logoInputRef.current?.click()}
+                      disabled={isUploadingLogo}
+                    >
+                      {isUploadingLogo ? "Uploading..." : logoPreviewUrl ? "Change logo" : "Upload logo"}
+                    </Button>
+                    {logoPreviewUrl && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setLogoStorageId(undefined);
+                          setLogoPreviewUrl(undefined);
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    )}
+                    <input
+                      ref={logoInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleLogoUpload}
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="hideWatermark"
+                    checked={hideAirViewBranding}
+                    onChange={(e) => setHideAirViewBranding(e.target.checked)}
+                  />
+                  <Label htmlFor="hideWatermark" className="cursor-pointer">
+                    Hide &quot;Powered by AirView&quot; watermark
+                  </Label>
+                </div>
+                <Button onClick={handleSaveBranding} disabled={!selectedTokenId}>
+                  Save branding
+                </Button>
+              </fieldset>
+            </CardContent>
+          </Card>
         </div>
 
         <Card className="h-fit">
@@ -521,6 +712,7 @@ export default function DeviceEmbedPage({
                           <BadgeSmall
                             isOnline={status.isOnline}
                             pm25={reading?.pm25}
+                            branding={previewBranding}
                           />
                         );
                       }
@@ -531,6 +723,7 @@ export default function DeviceEmbedPage({
                             isOnline={status.isOnline}
                             pm25={reading?.pm25}
                             co2={reading?.co2}
+                            branding={previewBranding}
                           />
                         );
                       }
@@ -539,6 +732,7 @@ export default function DeviceEmbedPage({
                           title={previewTitle}
                           isOnline={status.isOnline}
                           pm25={reading?.pm25}
+                          branding={previewBranding}
                         />
                       );
                     }
@@ -550,6 +744,7 @@ export default function DeviceEmbedPage({
                           isOnline={status.isOnline}
                           pm25={reading?.pm25}
                           co2={reading?.co2}
+                          branding={previewBranding}
                         />
                       );
                     }
@@ -566,6 +761,7 @@ export default function DeviceEmbedPage({
                             ts: point.ts,
                             pm25: point.pm25,
                           }))}
+                          branding={previewBranding}
                         />
                       );
                     }
@@ -577,6 +773,7 @@ export default function DeviceEmbedPage({
                         co2={reading?.co2}
                         tempC={reading?.tempC}
                         rh={reading?.rh}
+                        branding={previewBranding}
                       />
                     );
                   })()}

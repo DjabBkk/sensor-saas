@@ -47,6 +47,13 @@ export default function KioskPage({ params }: { params: Promise<{ token: string 
   const theme = themeOverride ?? data.theme;
   const isSingle = data.mode === "single";
 
+  const branding = {
+    brandName: data.brandName,
+    brandColor: data.brandColor,
+    logoUrl: data.logoUrl,
+    hideAirViewBranding: data.hideAirViewBranding,
+  };
+
   return (
     <div className={theme === "dark" ? "dark" : ""}>
       <div className="min-h-screen bg-background p-8 text-foreground">
@@ -66,6 +73,7 @@ export default function KioskPage({ params }: { params: Promise<{ token: string 
                   co2={reading?.co2}
                   tempC={reading?.tempC}
                   rh={reading?.rh}
+                  branding={branding}
                 />
               );
             })()
@@ -90,6 +98,7 @@ export default function KioskPage({ params }: { params: Promise<{ token: string 
                 rh: reading?.rh,
               };
             })}
+            branding={branding}
           />
         )}
       </div>

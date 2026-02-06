@@ -46,6 +46,11 @@ export const getEmbedDevice = query({
         description: v.optional(v.string()),
         size: v.optional(v.union(v.literal("small"), v.literal("medium"), v.literal("large"))),
         refreshInterval: v.optional(v.number()),
+        // Branding
+        brandName: v.optional(v.string()),
+        brandColor: v.optional(v.string()),
+        logoUrl: v.optional(v.string()),
+        hideAirViewBranding: v.optional(v.boolean()),
       }),
       device: deviceShape,
       latestReading: v.union(v.null(), readingShape),
@@ -83,11 +88,22 @@ export const getEmbedDevice = query({
       .order("desc")
       .take(96);
 
+    // Resolve logo URL from storage ID
+    let logoUrl: string | undefined;
+    if (embedToken.logoStorageId) {
+      const url = await ctx.storage.getUrl(embedToken.logoStorageId);
+      if (url) logoUrl = url;
+    }
+
     return {
       embed: {
         description: embedToken.description,
         size: embedToken.size,
         refreshInterval: embedToken.refreshInterval,
+        brandName: embedToken.brandName,
+        brandColor: embedToken.brandColor,
+        logoUrl,
+        hideAirViewBranding: embedToken.hideAirViewBranding,
       },
       device,
       latestReading: latestReading ?? null,
@@ -110,6 +126,11 @@ export const getKioskConfig = query({
       theme: v.union(v.literal("dark"), v.literal("light")),
       refreshInterval: v.number(),
       visibleMetrics: v.optional(v.array(v.string())),
+      // Branding
+      brandName: v.optional(v.string()),
+      brandColor: v.optional(v.string()),
+      logoUrl: v.optional(v.string()),
+      hideAirViewBranding: v.optional(v.boolean()),
       devices: v.array(
         v.object({
           device: deviceShape,
@@ -153,6 +174,13 @@ export const getKioskConfig = query({
       });
     }
 
+    // Resolve logo URL from storage ID
+    let logoUrl: string | undefined;
+    if (kiosk.logoStorageId) {
+      const url = await ctx.storage.getUrl(kiosk.logoStorageId);
+      if (url) logoUrl = url;
+    }
+
     return {
       label: kiosk.label,
       title: kiosk.title,
@@ -160,6 +188,10 @@ export const getKioskConfig = query({
       theme: kiosk.theme,
       refreshInterval: kiosk.refreshInterval,
       visibleMetrics: kiosk.visibleMetrics,
+      brandName: kiosk.brandName,
+      brandColor: kiosk.brandColor,
+      logoUrl,
+      hideAirViewBranding: kiosk.hideAirViewBranding,
       devices: devicesWithReadings,
     };
   },

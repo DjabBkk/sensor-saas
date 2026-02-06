@@ -88,6 +88,11 @@ export default defineSchema({
     description: v.optional(v.string()),
     size: v.optional(v.union(v.literal("small"), v.literal("medium"), v.literal("large"))),
     refreshInterval: v.optional(v.number()), // in seconds
+    // Branding (Pro+ plan)
+    brandName: v.optional(v.string()),
+    brandColor: v.optional(v.string()),
+    logoStorageId: v.optional(v.id("_storage")),
+    hideAirViewBranding: v.optional(v.boolean()),
     isRevoked: v.boolean(),
     createdAt: v.number(),
   })
@@ -105,6 +110,11 @@ export default defineSchema({
     theme: v.union(v.literal("dark"), v.literal("light")),
     refreshInterval: v.number(),
     visibleMetrics: v.optional(v.array(v.string())),
+    // Branding (Pro+ plan)
+    brandName: v.optional(v.string()),
+    brandColor: v.optional(v.string()),
+    logoStorageId: v.optional(v.id("_storage")),
+    hideAirViewBranding: v.optional(v.boolean()),
     isRevoked: v.boolean(),
     createdAt: v.number(),
   })

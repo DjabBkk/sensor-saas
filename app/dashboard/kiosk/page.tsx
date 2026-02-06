@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
@@ -22,6 +22,7 @@ import {
 import { getPlanLimits } from "@/convex/lib/planLimits";
 import { KioskSingle } from "@/components/kiosk/KioskSingle";
 import { KioskGrid } from "@/components/kiosk/KioskGrid";
+import { type BrandingProps } from "@/components/embed/Branding";
 
 type KioskMode = "single" | "multi";
 type KioskTheme = "dark" | "light";
@@ -33,6 +34,7 @@ export default function KioskDashboardPage() {
   const getOrCreateUser = useMutation(api.users.getOrCreateUser);
   const createKiosk = useMutation(api.kioskConfigs.create);
   const revokeKiosk = useMutation(api.kioskConfigs.revoke);
+  const generateUploadUrl = useMutation(api.storage.generateUploadUrl);
 
   const [convexUserId, setConvexUserId] = useState<Id<"users"> | null>(null);
   const [label, setLabel] = useState("");
@@ -43,6 +45,15 @@ export default function KioskDashboardPage() {
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<Array<string>>([]);
   const [origin, setOrigin] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  // Branding state
+  const [brandName, setBrandName] = useState("");
+  const [brandColor, setBrandColor] = useState("");
+  const [logoStorageId, setLogoStorageId] = useState<Id<"_storage"> | undefined>(undefined);
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | undefined>(undefined);
+  const [hideAirViewBranding, setHideAirViewBranding] = useState(false);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -170,6 +181,37 @@ export default function KioskDashboardPage() {
     return devices.filter((dev) => selectedDeviceIds.includes(dev._id));
   }, [devices, mode, selectedDeviceId, selectedDeviceIds]);
 
+  const canBrand = planLimits?.customBranding === true;
+
+  const previewBranding: BrandingProps = {
+    brandName: brandName || undefined,
+    brandColor: brandColor || undefined,
+    logoUrl: logoPreviewUrl,
+    hideAirViewBranding,
+  };
+
+  const handleLogoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !convexUserId) return;
+
+    setIsUploadingLogo(true);
+    try {
+      const uploadUrl = await generateUploadUrl({ userId: convexUserId });
+      const result = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      const { storageId } = await result.json();
+      setLogoStorageId(storageId);
+      setLogoPreviewUrl(URL.createObjectURL(file));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to upload logo.");
+    } finally {
+      setIsUploadingLogo(false);
+    }
+  }, [convexUserId, generateUploadUrl]);
+
   const handleToggleDevice = (deviceId: string) => {
     setSelectedDeviceIds((prev) =>
       prev.includes(deviceId)
@@ -210,9 +252,18 @@ export default function KioskDashboardPage() {
         deviceIds: deviceIds as Array<Id<"devices">>,
         theme,
         refreshInterval,
+        brandName: brandName || undefined,
+        brandColor: brandColor || undefined,
+        logoStorageId,
+        hideAirViewBranding,
       });
       setLabel("");
       setSelectedDeviceIds([]);
+      setBrandName("");
+      setBrandColor("");
+      setLogoStorageId(undefined);
+      setLogoPreviewUrl(undefined);
+      setHideAirViewBranding(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create kiosk.");
     }
@@ -317,6 +368,101 @@ export default function KioskDashboardPage() {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              {/* Branding section (Pro+ plan) */}
+              <div className="space-y-3 rounded-md border border-border p-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-semibold">Custom branding</Label>
+                  {!canBrand && (
+                    <span className="text-xs text-muted-foreground">
+                      <Link href="/dashboard/account" className="underline">Pro+ plan</Link>
+                    </span>
+                  )}
+                </div>
+                <fieldset disabled={!canBrand || atLimit} className="space-y-3">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="kiosk-brandName" className="text-xs">Brand name</Label>
+                      <Input
+                        id="kiosk-brandName"
+                        value={brandName}
+                        onChange={(e) => setBrandName(e.target.value)}
+                        placeholder="Your company name"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="kiosk-brandColor" className="text-xs">Brand color</Label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          id="kiosk-brandColor"
+                          value={brandColor || "#10b981"}
+                          onChange={(e) => setBrandColor(e.target.value)}
+                          className="h-9 w-12 cursor-pointer rounded border border-border"
+                        />
+                        <Input
+                          value={brandColor}
+                          onChange={(e) => setBrandColor(e.target.value)}
+                          placeholder="#10b981"
+                          className="flex-1"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Logo</Label>
+                    <div className="flex items-center gap-3">
+                      {logoPreviewUrl && (
+                        <img
+                          src={logoPreviewUrl}
+                          alt="Logo preview"
+                          className="h-10 w-10 rounded border border-border object-contain"
+                        />
+                      )}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => logoInputRef.current?.click()}
+                        disabled={isUploadingLogo}
+                      >
+                        {isUploadingLogo ? "Uploading..." : logoPreviewUrl ? "Change logo" : "Upload logo"}
+                      </Button>
+                      {logoPreviewUrl && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setLogoStorageId(undefined);
+                            setLogoPreviewUrl(undefined);
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      )}
+                      <input
+                        ref={logoInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleLogoUpload}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="kiosk-hideWatermark"
+                      checked={hideAirViewBranding}
+                      onChange={(e) => setHideAirViewBranding(e.target.checked)}
+                    />
+                    <Label htmlFor="kiosk-hideWatermark" className="cursor-pointer text-xs">
+                      Hide &quot;Powered by AirView&quot; watermark
+                    </Label>
+                  </div>
+                </fieldset>
               </div>
 
               <div className="space-y-2">
@@ -439,6 +585,7 @@ export default function KioskDashboardPage() {
                       co2={previewReading?.co2}
                       tempC={previewReading?.tempC}
                       rh={previewReading?.rh}
+                      branding={previewBranding}
                     />
                   ) : (
                     <KioskGrid
@@ -453,6 +600,7 @@ export default function KioskDashboardPage() {
                         tempC: dev._id === previewDeviceId ? previewReading?.tempC : undefined,
                         rh: dev._id === previewDeviceId ? previewReading?.rh : undefined,
                       }))}
+                      branding={previewBranding}
                     />
                   )}
                 </div>

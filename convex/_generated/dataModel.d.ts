@@ -120,11 +120,15 @@ export type DataModel = {
   };
   embedTokens: {
     document: {
+      brandColor?: string;
+      brandName?: string;
       createdAt: number;
       description?: string;
       deviceId: Id<"devices">;
+      hideAirViewBranding?: boolean;
       isRevoked: boolean;
       label?: string;
+      logoStorageId?: Id<"_storage">;
       refreshInterval?: number;
       size?: "small" | "medium" | "large";
       token: string;
@@ -135,11 +139,15 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "brandColor"
+      | "brandName"
       | "createdAt"
       | "description"
       | "deviceId"
+      | "hideAirViewBranding"
       | "isRevoked"
       | "label"
+      | "logoStorageId"
       | "refreshInterval"
       | "size"
       | "token"
@@ -180,10 +188,14 @@ export type DataModel = {
   };
   kioskConfigs: {
     document: {
+      brandColor?: string;
+      brandName?: string;
       createdAt: number;
       deviceIds: Array<Id<"devices">>;
+      hideAirViewBranding?: boolean;
       isRevoked: boolean;
       label?: string;
+      logoStorageId?: Id<"_storage">;
       mode: "single" | "multi";
       refreshInterval: number;
       theme: "dark" | "light";
@@ -197,10 +209,14 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "brandColor"
+      | "brandName"
       | "createdAt"
       | "deviceIds"
+      | "hideAirViewBranding"
       | "isRevoked"
       | "label"
+      | "logoStorageId"
       | "mode"
       | "refreshInterval"
       | "theme"

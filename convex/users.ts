@@ -376,3 +376,24 @@ export const mergeDuplicateUsers = internalMutation({
     };
   },
 });
+
+/**
+ * Debug-only mutation to switch plans for testing.
+ * Restricted to karlvonluckwald@gmail.com for safety.
+ */
+export const debugSetPlan = mutation({
+  args: {
+    userId: v.id("users"),
+    plan: planValidator,
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) throw new Error("User not found.");
+    if (user.email !== "karlvonluckwald@gmail.com") {
+      throw new Error("Debug plan switching is not available for this account.");
+    }
+    await ctx.db.patch(args.userId, { plan: args.plan });
+    return null;
+  },
+});

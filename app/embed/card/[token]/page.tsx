@@ -56,6 +56,13 @@ export default function EmbedCardPage({
               ? sizeParam
               : data.embed.size ?? "medium";
 
+          const branding = {
+            brandName: data.embed.brandName,
+            brandColor: data.embed.brandColor,
+            logoUrl: data.embed.logoUrl,
+            hideAirViewBranding: data.embed.hideAirViewBranding,
+          };
+
           return (
             <>
               {size === "small" && (
@@ -64,6 +71,7 @@ export default function EmbedCardPage({
                   isOnline={true}
                   pm25={reading?.pm25}
                   co2={reading?.co2}
+                  branding={branding}
                 />
               )}
               {size === "medium" && (
@@ -74,6 +82,7 @@ export default function EmbedCardPage({
                   co2={reading?.co2}
                   tempC={reading?.tempC}
                   rh={reading?.rh}
+                  branding={branding}
                 />
               )}
               {size === "large" && (
@@ -88,6 +97,7 @@ export default function EmbedCardPage({
                     ts: point.ts,
                     pm25: point.pm25,
                   }))}
+                  branding={branding}
                 />
               )}
             </>

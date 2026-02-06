@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { useTheme } from "next-themes";
 
 import { api } from "@/convex/_generated/api";
@@ -19,6 +19,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   LayoutDashboard,
   Cpu,
   Settings,
@@ -31,7 +38,9 @@ import {
   ChevronLeft,
   Sun,
   Moon,
+  Bug,
 } from "lucide-react";
+import type { Plan } from "@/convex/lib/planLimits";
 
 type Device = {
   _id: Id<"devices">;
@@ -57,6 +66,8 @@ type SidebarProps = {
   onAddDevice?: () => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  userEmail?: string;
+  userPlan?: Plan;
 };
 
 const navItems = [
@@ -71,6 +82,8 @@ const bottomNavItems = [
   { href: "/dashboard/account", label: "Account", icon: User },
 ];
 
+const DEBUG_EMAIL = "karlvonluckwald@gmail.com";
+
 export function Sidebar({
   devices,
   rooms,
@@ -79,6 +92,8 @@ export function Sidebar({
   onAddDevice,
   isCollapsed = false,
   onToggleCollapse,
+  userEmail,
+  userPlan,
 }: SidebarProps) {
   const pathname = usePathname();
   const isAtDeviceLimit = devices.length >= maxDevices;
@@ -264,11 +279,6 @@ export function Sidebar({
 
         <Separator />
 
-        {/* Theme Toggle */}
-        <ThemeToggle isCollapsed={isCollapsed} />
-
-        <Separator />
-
         {/* Bottom Navigation */}
         <nav className="flex flex-col gap-1 p-3">
           {bottomNavItems.map((item) => {
@@ -290,8 +300,67 @@ export function Sidebar({
             );
           })}
         </nav>
+
+        {/* Debug Plan Switcher (only for debug email) */}
+        {userEmail === DEBUG_EMAIL && (
+          <>
+            <Separator />
+            <DebugPlanSwitcher
+              userId={userId}
+              currentPlan={userPlan ?? "starter"}
+              isCollapsed={isCollapsed}
+            />
+          </>
+        )}
+
+        <Separator />
+
+        {/* Theme Toggle */}
+        <ThemeToggle isCollapsed={isCollapsed} />
       </aside>
     </TooltipProvider>
+  );
+}
+
+// Debug Plan Switcher (restricted to specific email)
+function DebugPlanSwitcher({
+  userId,
+  currentPlan,
+  isCollapsed,
+}: {
+  userId: Id<"users">;
+  currentPlan: Plan;
+  isCollapsed: boolean;
+}) {
+  const debugSetPlan = useMutation(api.users.debugSetPlan);
+
+  const handlePlanChange = async (newPlan: string) => {
+    try {
+      await debugSetPlan({ userId, plan: newPlan as Plan });
+    } catch (err) {
+      console.error("Failed to switch plan:", err);
+    }
+  };
+
+  return (
+    <div className="px-3 py-2">
+      <div className="flex items-center gap-2">
+        <Bug className="h-4 w-4 flex-shrink-0 text-amber-500" />
+        {!isCollapsed && (
+          <Select value={currentPlan} onValueChange={handlePlanChange}>
+            <SelectTrigger className="h-7 flex-1 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="starter">Starter</SelectItem>
+              <SelectItem value="pro">Pro</SelectItem>
+              <SelectItem value="business">Business</SelectItem>
+              <SelectItem value="custom">Custom</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+    </div>
   );
 }
 
