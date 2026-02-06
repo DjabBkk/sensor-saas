@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { getDeviceStatus } from "@/lib/deviceStatus";
+import { getDeviceStatus, formatDuration } from "@/lib/deviceStatus";
 import {
   Tooltip,
   TooltipContent,
@@ -345,7 +345,7 @@ function DeviceSidebarItem({
                 status.isOnline
                   ? "Online"
                   : status.isReadingOverdue
-                    ? `No data for ${status.overdueMinutes ?? "?"} min`
+                    ? `No data for ${formatDuration(status.overdueMinutes)}`
                     : "Offline"
               }
             />
@@ -364,7 +364,7 @@ function DeviceSidebarItem({
           {status.isOnline
             ? "Online"
             : status.isReadingOverdue
-              ? `No data for ${status.overdueMinutes ?? "?"} min`
+              ? `No data for ${formatDuration(status.overdueMinutes)}`
               : "Offline"}
         </p>
       </TooltipContent>

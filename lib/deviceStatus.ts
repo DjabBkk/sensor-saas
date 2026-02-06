@@ -18,17 +18,35 @@ export type DeviceStatusResult = {
 /**
  * Returns grace period in milliseconds based on the report interval.
  * Grace periods per user specification:
- * - 1 min (60s)   → 2 min grace
- * - 5 min (300s)  → 3 min grace
- * - 10 min (600s) → 5 min grace
- * - 30 min (1800s) → 5 min grace
- * - 60 min (3600s) → 5 min grace
+ * - 1 min (60s)   → 5 min grace
+ * - 5 min (300s)  → 7 min grace
+ * - 10 min (600s) → 10 min grace
+ * - 30 min (1800s) → 12 min grace
+ * - 60 min (3600s) → 15 min grace
  */
-function getGracePeriodMs(intervalSeconds: number): number {
-  if (intervalSeconds <= 60) return 2 * 60 * 1000; // 2 min for 1-min interval
-  if (intervalSeconds <= 300) return 3 * 60 * 1000; // 3 min for 5-min interval
-  if (intervalSeconds <= 600) return 5 * 60 * 1000; // 5 min for 10-min interval
-  return 5 * 60 * 1000; // 5 min for 30-min and 60-min intervals
+export function getGracePeriodMs(intervalSeconds: number): number {
+  if (intervalSeconds <= 60) return 5 * 60 * 1000; // 5 min for 1-min interval
+  if (intervalSeconds <= 300) return 7 * 60 * 1000; // 7 min for 5-min interval
+  if (intervalSeconds <= 600) return 10 * 60 * 1000; // 10 min for 10-min interval
+  if (intervalSeconds <= 1800) return 12 * 60 * 1000; // 12 min for 30-min interval
+  return 15 * 60 * 1000; // 15 min for 60-min interval
+}
+
+/**
+ * Formats a duration in minutes to a human-friendly string.
+ * Examples: "32m", "12h 12m", "1d 5m", "2d 3h 15m"
+ */
+export function formatDuration(minutes: number | undefined): string {
+  if (minutes === undefined || minutes < 0) return "?";
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  const mins = minutes % 60;
+
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (mins > 0 || parts.length === 0) parts.push(`${mins}m`);
+  return parts.join(" ");
 }
 
 export const getDeviceStatus = ({

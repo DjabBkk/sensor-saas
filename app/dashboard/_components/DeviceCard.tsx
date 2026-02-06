@@ -5,7 +5,7 @@ import { useQuery } from "convex/react";
 import { Id } from "@/convex/_generated/dataModel";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { getDeviceStatus } from "@/lib/deviceStatus";
+import { getDeviceStatus, formatDuration, getGracePeriodMs } from "@/lib/deviceStatus";
 import { RadialGaugeCard } from "@/components/ui/radial-gauge";
 import { DeviceSettingsDialog } from "@/app/dashboard/_components/DeviceSettingsDialog";
 import { Button } from "@/components/ui/button";
@@ -33,7 +33,7 @@ import {
   ChartLegendContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, CartesianGrid, ReferenceArea, XAxis, YAxis } from "recharts";
 import { Settings } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -121,20 +121,31 @@ const getXAxisTickFormatter = (range: keyof typeof TIME_RANGES) => {
 };
 
 const getTooltipLabelFormatter = (range: keyof typeof TIME_RANGES) => {
-  if (range === "1d") {
-    return (value: number) =>
-      new Date(value).toLocaleString("en-US", {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (_value: any, payload: Array<{ payload?: Record<string, any> }>) => {
+    const ts = payload?.[0]?.payload?.ts;
+    if (typeof ts !== "number") return "—";
+    if (range === "1d") {
+      return new Date(ts).toLocaleString("en-US", {
         month: "short",
         day: "numeric",
         hour: "numeric",
         minute: "2-digit",
       });
-  }
-  return (value: number) =>
-    new Date(value).toLocaleDateString("en-US", {
+    }
+    if (range === "7d") {
+      return new Date(ts).toLocaleString("en-US", {
+        weekday: "short",
+        day: "numeric",
+        hour: "numeric",
+      });
+    }
+    return new Date(ts).toLocaleString("en-US", {
       month: "short",
       day: "numeric",
+      hour: "numeric",
     });
+  };
 };
 
 function getOfflineReasonLabel(
@@ -378,27 +389,63 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
     limit: 1000, // Adjust based on your needs
   });
 
-  // Transform readings data to chart format
-  // Query returns data in descending order (newest first), so we reverse to get chronological (oldest first, left to right)
-  const historyData = useMemo(() => {
-    if (!historyReadings || historyReadings.length === 0) {
-      return [];
-    }
-
-    // Sort by timestamp ascending (oldest first) to ensure left-to-right chronological display
-    return historyReadings
-      .slice()
-      .sort((a, b) => a.ts - b.ts)
-      .map((reading) => ({
-        ts: reading.ts,
-        pm25: reading.pm25,
-        co2: reading.co2,
-        temperature: reading.tempC,
-        humidity: reading.rh,
-        pm10: reading.pm10,
-        voc: reading.voc,
-      }));
+  // Sort readings chronologically (oldest first, left to right on chart)
+  const sortedReadings = useMemo(() => {
+    if (!historyReadings || historyReadings.length === 0) return [];
+    return historyReadings.slice().sort((a, b) => a.ts - b.ts);
   }, [historyReadings]);
+
+  // Detect offline gaps in the sorted readings
+  const offlineGaps = useMemo(() => {
+    if (sortedReadings.length < 1) return [];
+    const intervalSeconds = device.reportInterval ?? 3600;
+    const gapThreshold = intervalSeconds * 1000 + getGracePeriodMs(intervalSeconds);
+    const gaps: Array<{ start: number; end: number }> = [];
+    for (let i = 1; i < sortedReadings.length; i++) {
+      const delta = sortedReadings[i].ts - sortedReadings[i - 1].ts;
+      if (delta > gapThreshold) {
+        gaps.push({ start: sortedReadings[i - 1].ts, end: sortedReadings[i].ts });
+      }
+    }
+    // If device is currently offline, extend gap from last reading to now
+    if (status.isReadingOverdue && sortedReadings.length > 0) {
+      const lastTs = sortedReadings[sortedReadings.length - 1].ts;
+      const existingGap = gaps.find((g) => g.start === lastTs);
+      if (existingGap) {
+        existingGap.end = timeRangeMs.endTs;
+      } else {
+        gaps.push({ start: lastTs, end: timeRangeMs.endTs });
+      }
+    }
+    return gaps;
+  }, [sortedReadings, device.reportInterval, status.isReadingOverdue, timeRangeMs.endTs]);
+
+  // Transform to chart format, inserting null separators at gap boundaries to break lines
+  const historyData = useMemo(() => {
+    if (sortedReadings.length === 0) return [];
+    const gapStartSet = new Set(offlineGaps.map((g) => g.start));
+    const result: Array<Record<string, number | null>> = [];
+    for (const reading of sortedReadings) {
+      result.push({
+        ts: reading.ts,
+        pm25: reading.pm25 ?? null,
+        co2: reading.co2 ?? null,
+        temperature: reading.tempC ?? null,
+        humidity: reading.rh ?? null,
+        pm10: reading.pm10 ?? null,
+        voc: reading.voc ?? null,
+      });
+      // Insert a null separator after readings that start a gap
+      if (gapStartSet.has(reading.ts)) {
+        result.push({
+          ts: reading.ts + 1,
+          pm25: null, co2: null, temperature: null,
+          humidity: null, pm10: null, voc: null,
+        });
+      }
+    }
+    return result;
+  }, [sortedReadings, offlineGaps]);
 
   // Chart config for selected metrics
   const chartConfig: ChartConfig = {
@@ -431,7 +478,7 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
                   status.isOnline
                     ? "Online"
                     : status.isReadingOverdue
-                      ? `No data for ${status.overdueMinutes ?? "?"} min`
+                      ? `No data for ${formatDuration(status.overdueMinutes)}`
                       : "Offline"
                 }
               />
@@ -459,7 +506,7 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
                   variant="outline" 
                   className="border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400"
                 >
-                  Device offline for {status.overdueMinutes ?? "?"} minutes. Check status or charge battery.
+                  Device offline for {formatDuration(status.overdueMinutes)}. Check status or charge battery.
                 </Badge>
               )}
             </div>
@@ -684,6 +731,27 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
                       />
                     }
                   />
+                  {/* Offline period overlays */}
+                  {offlineGaps.map((gap, i) => (
+                    <ReferenceArea
+                      key={`offline-${i}`}
+                      x1={gap.start}
+                      x2={gap.end}
+                      yAxisId="left"
+                      fill="currentColor"
+                      fillOpacity={0.06}
+                      stroke="currentColor"
+                      strokeOpacity={0.15}
+                      strokeDasharray="4 2"
+                      label={{
+                        value: "Offline",
+                        position: "center",
+                        fill: "currentColor",
+                        fontSize: 11,
+                        opacity: 0.4,
+                      }}
+                    />
+                  ))}
                   {/* Primary metric area */}
                   <Area
                     yAxisId="left"

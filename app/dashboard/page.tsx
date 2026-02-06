@@ -10,7 +10,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { getDeviceStatus } from "@/lib/deviceStatus";
+import { getDeviceStatus, formatDuration } from "@/lib/deviceStatus";
 import {
   getPM25Level,
   getPM10Level,
@@ -285,7 +285,7 @@ function DeviceOverviewCard({
                       status.isOnline
                         ? "Online"
                         : status.isReadingOverdue
-                          ? `No data for ${status.overdueMinutes ?? "?"} min`
+                          ? `No data for ${formatDuration(status.overdueMinutes)}`
                           : "Offline"
                     }
                   />
@@ -308,7 +308,7 @@ function DeviceOverviewCard({
                       variant="outline" 
                       className="border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400"
                     >
-                      Device offline for {status.overdueMinutes ?? "?"} minutes
+                      Device offline for {formatDuration(status.overdueMinutes)}
                     </Badge>
                   )}
                 </div>
