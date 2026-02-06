@@ -71,11 +71,12 @@ http.route({
 
     const reportIntervalSeconds = device?.reportInterval ?? 3600;
     const reportIntervalMs = reportIntervalSeconds * 1000;
-    // Use intervalChangeAt as minimum cutoff to prevent retroactive ingestion
-    // Only accept readings newer than when the interval was last changed
-    const minAcceptedTs = device?.intervalChangeAt 
-      ? Math.max(device.intervalChangeAt, device?.lastReadingAt ?? 0)
-      : (device?.lastReadingAt ?? 0);
+    // Use intervalChangeAt and createdAt as minimum cutoffs to prevent retroactive/stale ingestion
+    const minAcceptedTs = Math.max(
+      device?.intervalChangeAt ?? 0,
+      device?.lastReadingAt ?? 0,
+      device?.createdAt ?? 0,
+    );
     let lastAcceptedTs = minAcceptedTs;
 
     // Process readings for this device

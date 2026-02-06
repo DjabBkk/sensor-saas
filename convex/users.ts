@@ -1,4 +1,4 @@
-import { query, mutation, internalMutation } from "./_generated/server";
+import { query, mutation, internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { planValidator } from "./lib/validators";
 
@@ -89,6 +89,26 @@ export const getCurrentUser = query({
       .first();
 
     return user ?? null;
+  },
+});
+
+/**
+ * Internal query to get a user by their Convex _id.
+ * Used by actions (e.g. updateDeviceReportInterval) that need to look up the user's plan.
+ */
+export const getInternal = internalQuery({
+  args: { userId: v.id("users") },
+  returns: v.union(
+    v.null(),
+    v.object({
+      _id: v.id("users"),
+      plan: planValidator,
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) return null;
+    return { _id: user._id, plan: user.plan };
   },
 });
 

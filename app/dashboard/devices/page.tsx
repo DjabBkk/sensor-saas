@@ -110,6 +110,7 @@ function DeviceRow({ device }: { device: Device }) {
     lastReadingAt,
     lastBattery: device.lastBattery,
     providerOffline: device.providerOffline,
+    createdAt: device.createdAt,
   });
 
   const pm25Level = reading?.pm25 !== undefined ? getPM25Level(reading.pm25) : null;

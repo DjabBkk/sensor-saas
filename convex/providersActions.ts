@@ -6,6 +6,7 @@ import { v } from "convex/values";
 import { providerValidator } from "./lib/validators";
 import { internal } from "./_generated/api";
 import * as qingping from "./providers/qingping";
+import { getMinRefreshInterval, type Plan } from "./lib/planLimits";
 
 const normalizeTimestampMs = (ts: number) => (ts < 1e12 ? ts * 1000 : ts);
 
@@ -414,6 +415,26 @@ export const updateDeviceReportInterval = action({
       };
     }
 
+    // Enforce plan-based minimum interval
+    const user = await ctx.runQuery(internal.users.getInternal, {
+      userId: args.userId,
+    });
+    if (!user) {
+      return {
+        success: false,
+        message: "User not found",
+      };
+    }
+    const plan = user.plan as Plan;
+    const minInterval = getMinRefreshInterval(plan);
+    if (args.reportIntervalSeconds < minInterval) {
+      const minMinutes = Math.round(minInterval / 60);
+      return {
+        success: false,
+        message: `Your ${plan.charAt(0).toUpperCase() + plan.slice(1)} plan allows a minimum interval of ${minMinutes} minute${minMinutes === 1 ? "" : "s"}. Upgrade your plan for more frequent updates.`,
+      };
+    }
+
     // Get provider config for access token
     const config = await ctx.runQuery(internal.providers.getConfig, {
       userId: args.userId,
@@ -618,10 +639,12 @@ export const pollAllReadings = internalAction({
         });
         const reportIntervalSeconds = deviceRecord?.reportInterval ?? 3600;
         const reportIntervalMs = reportIntervalSeconds * 1000;
-        // Use intervalChangeAt as minimum cutoff to prevent retroactive ingestion
-        const minAcceptedTs = deviceRecord?.intervalChangeAt
-          ? Math.max(deviceRecord.intervalChangeAt, deviceRecord?.lastReadingAt ?? 0)
-          : (deviceRecord?.lastReadingAt ?? 0);
+        // Use intervalChangeAt and createdAt as minimum cutoffs to prevent retroactive/stale ingestion
+        const minAcceptedTs = Math.max(
+          deviceRecord?.intervalChangeAt ?? 0,
+          deviceRecord?.lastReadingAt ?? 0,
+          deviceRecord?.createdAt ?? 0,
+        );
         const readingTs = normalizeTimestampMs(reading.ts);
 
         // Skip readings older than the interval change timestamp

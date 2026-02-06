@@ -461,6 +461,7 @@ export default function DeviceEmbedPage({
                       lastReadingAt: device.lastReadingAt,
                       lastBattery: device.lastBattery,
                       providerOffline: device.providerOffline,
+                      createdAt: device.createdAt,
                     });
                     const reading = status.isOnline ? latestReading ?? null : null;
 

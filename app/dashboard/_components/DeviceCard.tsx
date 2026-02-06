@@ -36,6 +36,7 @@ import {
 import { Area, AreaChart, CartesianGrid, ReferenceArea, XAxis, YAxis } from "recharts";
 import { Settings } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { type Plan } from "@/convex/lib/planLimits";
 
 type Reading = {
   _id: Id<"readings">;
@@ -68,6 +69,8 @@ type Device = {
 type DeviceCardProps = {
   device: Device;
   reading: Reading | null;
+  /** User's current plan, used to gate interval options in settings */
+  userPlan?: Plan;
 };
 
 // Chart colors for each metric
@@ -181,12 +184,13 @@ function formatRelativeTime(timestampMs: number) {
 }
 
 
-export function DeviceCard({ device, reading }: DeviceCardProps) {
+export function DeviceCard({ device, reading, userPlan }: DeviceCardProps) {
   const status = getDeviceStatus({
     lastReadingAt: reading?.ts ?? device.lastReadingAt,
     lastBattery: device.lastBattery,
     providerOffline: device.providerOffline,
     reportInterval: device.reportInterval,
+    createdAt: device.createdAt,
   });
 
   // Track which metrics are selected for comparison (right is optional)
@@ -489,6 +493,7 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
                 hiddenMetrics={device.hiddenMetrics}
                 availableMetrics={availableMetricKeys}
                 reportInterval={device.reportInterval}
+                userPlan={userPlan}
                 trigger={
                   <Button
                     variant="ghost"

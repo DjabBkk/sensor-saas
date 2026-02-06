@@ -27,7 +27,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle, Loader2, Trash2, Clock } from "lucide-react";
+import { AlertTriangle, Loader2, Trash2, Clock, Lock } from "lucide-react";
+import { getMinRefreshInterval, type Plan } from "@/convex/lib/planLimits";
 
 type DeviceSettingsDialogProps = {
   deviceId: Id<"devices">;
@@ -45,6 +46,8 @@ type DeviceSettingsDialogProps = {
   /** Control dialog open state externally */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** User's current plan, used to gate interval options */
+  userPlan?: Plan;
 };
 
 const INTERVAL_OPTIONS = [
@@ -54,6 +57,14 @@ const INTERVAL_OPTIONS = [
   { value: 1800, label: "30 minutes" },
   { value: 3600, label: "1 hour" },
 ];
+
+/** Returns the minimum plan name required to use a given interval. */
+function getRequiredPlanForInterval(intervalSeconds: number): Plan {
+  if (intervalSeconds >= 3600) return "starter";
+  if (intervalSeconds >= 1800) return "pro";
+  if (intervalSeconds >= 300) return "business";
+  return "custom";
+}
 
 const METRIC_OPTIONS = [
   { key: "pm25", label: "PM2.5" },
@@ -79,6 +90,7 @@ export function DeviceSettingsDialog({
   hideProfileMetrics = false,
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
+  userPlan = "starter",
 }: DeviceSettingsDialogProps) {
   const router = useRouter();
   const updateHiddenMetrics = useMutation(api.devices.updateHiddenMetrics);
@@ -136,6 +148,8 @@ export function DeviceSettingsDialog({
   const visibleCount =
     availableMetricKeys.length -
     availableMetricKeys.filter((key) => hiddenMetricsSet.has(key)).length;
+
+  const minInterval = getMinRefreshInterval(userPlan);
 
   useEffect(() => {
     if (open) {
@@ -489,11 +503,27 @@ export function DeviceSettingsDialog({
                   <SelectValue placeholder="Select interval" />
                 </SelectTrigger>
                 <SelectContent>
-                  {INTERVAL_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={String(option.value)}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
+                  {INTERVAL_OPTIONS.map((option) => {
+                    const isLocked = option.value < minInterval;
+                    const requiredPlan = getRequiredPlanForInterval(option.value);
+                    return (
+                      <SelectItem
+                        key={option.value}
+                        value={String(option.value)}
+                        disabled={isLocked}
+                      >
+                        <span className="flex items-center gap-2">
+                          {option.label}
+                          {isLocked && (
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                              <Lock className="h-3 w-3" />
+                              Upgrade to {requiredPlan.charAt(0).toUpperCase() + requiredPlan.slice(1)}
+                            </span>
+                          )}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
               {isUpdatingInterval && (

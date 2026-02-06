@@ -127,6 +127,7 @@ export default function DashboardPage() {
               key={device._id}
               device={device}
               userId={convexUserId}
+              userPlan={plan}
             />
           ))}
         </div>
@@ -139,6 +140,7 @@ export default function DashboardPage() {
 function DeviceOverviewCard({
   device,
   userId,
+  userPlan,
 }: {
   device: {
     _id: Id<"devices">;
@@ -155,6 +157,7 @@ function DeviceOverviewCard({
     reportInterval?: number;
   };
   userId: Id<"users">;
+  userPlan: Plan;
 }) {
   const reading = useQuery(api.readings.latest, { deviceId: device._id });
 
@@ -164,6 +167,7 @@ function DeviceOverviewCard({
     lastBattery: device.lastBattery,
     providerOffline: device.providerOffline,
     reportInterval: device.reportInterval,
+    createdAt: device.createdAt,
   });
 
   // Show readings even when offline (so users can see last known values)
@@ -406,6 +410,7 @@ function DeviceOverviewCard({
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
         trigger={<></>}
+        userPlan={userPlan}
       />
     </>
   );

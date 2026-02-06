@@ -88,6 +88,7 @@ export default function WidgetsDashboardPage() {
               lastReadingAt: device.lastReadingAt,
               lastBattery: device.lastBattery,
               providerOffline: device.providerOffline,
+              createdAt: device.createdAt,
             });
 
             return (

@@ -3,6 +3,7 @@ export type DeviceStatusInput = {
   lastBattery?: number;
   providerOffline?: boolean;
   reportInterval?: number; // in seconds
+  createdAt?: number; // device creation timestamp (ms)
 };
 
 export type DeviceStatusResult = {
@@ -54,6 +55,7 @@ export const getDeviceStatus = ({
   lastBattery,
   providerOffline,
   reportInterval = 3600, // default 1 hour
+  createdAt,
 }: DeviceStatusInput): DeviceStatusResult => {
   const now = Date.now();
   const hasReading = typeof lastReadingAt === "number";
@@ -65,8 +67,12 @@ export const getDeviceStatus = ({
   const graceMs = getGracePeriodMs(reportInterval);
   const thresholdMs = intervalMs + graceMs;
 
+  // A device is "newly added" if it was created within the expected reporting window.
+  // It hasn't had a chance to complete its first reporting cycle yet, so don't mark it overdue.
+  const isNewlyAdded = createdAt !== undefined && (now - createdAt) < thresholdMs;
+
   const timeSinceLastReading = hasReading ? now - lastReadingAt : Infinity;
-  const isReadingOverdue = hasReading && timeSinceLastReading > thresholdMs;
+  const isReadingOverdue = hasReading && !isNewlyAdded && timeSinceLastReading > thresholdMs;
 
   // Calculate how many minutes overdue (for display)
   let overdueMinutes: number | undefined;

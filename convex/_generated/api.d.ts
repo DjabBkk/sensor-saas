@@ -600,14 +600,7 @@ export declare const api: {
         createdAt: number;
         email: string;
         name?: string;
-        plan:
-          | "starter"
-          | "pro"
-          | "business"
-          | "custom"
-          | "free"
-          | "basic"
-          | "team";
+        plan: "starter" | "pro" | "business" | "custom";
       }
     >;
     getOrCreateUser: FunctionReference<
@@ -918,6 +911,15 @@ export declare const internal: {
     >;
   };
   users: {
+    getInternal: FunctionReference<
+      "query",
+      "internal",
+      { userId: Id<"users"> },
+      null | {
+        _id: Id<"users">;
+        plan: "starter" | "pro" | "business" | "custom";
+      }
+    >;
     mergeDuplicateUsers: FunctionReference<
       "mutation",
       "internal",
@@ -930,12 +932,6 @@ export declare const internal: {
         roomsTransferred: number;
         usersDeleted: number;
       }
-    >;
-    migratePlanNames: FunctionReference<
-      "mutation",
-      "internal",
-      {},
-      { skipped: number; updated: number }
     >;
   };
 };

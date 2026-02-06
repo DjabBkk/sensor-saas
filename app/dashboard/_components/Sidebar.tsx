@@ -339,6 +339,7 @@ function DeviceSidebarItem({
     lastBattery: device.lastBattery,
     providerOffline: device.providerOffline,
     reportInterval: device.reportInterval,
+    createdAt: device.createdAt,
   });
 
   return (

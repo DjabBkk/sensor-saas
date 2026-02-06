@@ -314,14 +314,7 @@ export type DataModel = {
       createdAt: number;
       email: string;
       name?: string;
-      plan:
-        | "starter"
-        | "pro"
-        | "business"
-        | "custom"
-        | "free"
-        | "basic"
-        | "team";
+      plan: "starter" | "pro" | "business" | "custom";
       _id: Id<"users">;
       _creationTime: number;
     };

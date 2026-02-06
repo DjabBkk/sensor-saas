@@ -2,11 +2,13 @@
 
 import { use } from "react";
 import { useQuery } from "convex/react";
+import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { DeviceCard } from "../../_components/DeviceCard";
+import { type Plan } from "@/convex/lib/planLimits";
 
 type PageProps = {
   params: Promise<{ deviceId: string }>;
@@ -14,6 +16,7 @@ type PageProps = {
 
 export default function DeviceDetailPage({ params }: PageProps) {
   const { deviceId } = use(params);
+  const { userId } = useAuth();
   
   const device = useQuery(api.devices.get, {
     deviceId: deviceId as Id<"devices">,
@@ -21,6 +24,11 @@ export default function DeviceDetailPage({ params }: PageProps) {
   const reading = useQuery(api.readings.latest, {
     deviceId: deviceId as Id<"devices">,
   });
+  const convexUser = useQuery(
+    api.users.getCurrentUser,
+    userId ? { authId: userId } : "skip"
+  );
+  const plan = (convexUser?.plan ?? "starter") as Plan;
 
   if (device === undefined) {
     return (
@@ -70,7 +78,7 @@ export default function DeviceDetailPage({ params }: PageProps) {
       </nav>
 
       {/* Device Card with all readings */}
-      <DeviceCard device={device} reading={reading ?? null} />
+      <DeviceCard device={device} reading={reading ?? null} userPlan={plan} />
     </div>
   );
 }
