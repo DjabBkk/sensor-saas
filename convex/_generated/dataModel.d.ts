@@ -314,7 +314,14 @@ export type DataModel = {
       createdAt: number;
       email: string;
       name?: string;
-      plan: "free" | "basic" | "pro" | "team";
+      plan:
+        | "starter"
+        | "pro"
+        | "business"
+        | "custom"
+        | "free"
+        | "basic"
+        | "team";
       _id: Id<"users">;
       _creationTime: number;
     };

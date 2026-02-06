@@ -166,7 +166,7 @@ export default function AccountPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Badge variant="secondary" className="text-sm">
-                {convexUser?.plan?.toUpperCase() ?? "FREE"}
+                {convexUser?.plan?.toUpperCase() ?? "STARTER"}
               </Badge>
               <span className="text-muted-foreground">Current Plan</span>
             </div>

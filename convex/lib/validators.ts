@@ -8,8 +8,8 @@ export const providerValidator = v.union(
 );
 
 export const planValidator = v.union(
-  v.literal("free"),
-  v.literal("basic"),
+  v.literal("starter"),
   v.literal("pro"),
-  v.literal("team"),
+  v.literal("business"),
+  v.literal("custom"),
 );

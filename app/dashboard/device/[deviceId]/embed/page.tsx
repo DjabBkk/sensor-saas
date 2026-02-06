@@ -130,36 +130,36 @@ export default function DeviceEmbedPage({
     }
   }, [selectedToken]);
 
+  // All possible refresh interval options (most frequent first)
+  const ALL_REFRESH_OPTIONS = [
+    { value: 60, label: "1 minute" },
+    { value: 5 * 60, label: "5 minutes" },
+    { value: 10 * 60, label: "10 minutes" },
+    { value: 15 * 60, label: "15 minutes" },
+    { value: 30 * 60, label: "30 minutes" },
+    { value: 60 * 60, label: "1 hour" },
+  ];
+
+  // Min refresh interval per plan (seconds)
+  const PLAN_MIN_REFRESH: Record<string, number> = {
+    starter: 3600,  // 60 min
+    pro: 1800,      // 30 min
+    business: 300,  // 5 min
+    custom: 60,     // 1 min
+  };
+
   // Generate refresh interval options based on plan
   const refreshIntervalOptions = useMemo(() => {
     if (!convexUser?.plan) return [];
-    
-    const plan = convexUser.plan;
-    const options: { value: number; label: string }[] = [];
-    
-    if (plan === "free") {
-      // Free plan: 10 minutes to 1 hour
-      options.push({ value: 10 * 60, label: "10 minutes" });
-      options.push({ value: 15 * 60, label: "15 minutes" });
-      options.push({ value: 30 * 60, label: "30 minutes" });
-      options.push({ value: 60 * 60, label: "1 hour" });
-    } else {
-      // Paid plans: 1 minute to 1 hour (matching device intervals)
-      options.push({ value: 60, label: "1 minute" });
-      options.push({ value: 5 * 60, label: "5 minutes" });
-      options.push({ value: 10 * 60, label: "10 minutes" });
-      options.push({ value: 30 * 60, label: "30 minutes" });
-      options.push({ value: 60 * 60, label: "1 hour" });
-    }
-    
-    return options;
+    const minInterval = PLAN_MIN_REFRESH[convexUser.plan] ?? 3600;
+    return ALL_REFRESH_OPTIONS.filter((opt) => opt.value >= minInterval);
   }, [convexUser?.plan]);
 
   // Set default refresh interval based on plan when user loads
   useEffect(() => {
     if (convexUser?.plan && refreshInterval === null) {
-      const defaultInterval = convexUser.plan === "free" ? 10 * 60 : 60;
-      setRefreshInterval(defaultInterval);
+      const minInterval = PLAN_MIN_REFRESH[convexUser.plan] ?? 3600;
+      setRefreshInterval(minInterval);
     }
   }, [convexUser?.plan, refreshInterval]);
   const widgetDimensions = useMemo(() => {

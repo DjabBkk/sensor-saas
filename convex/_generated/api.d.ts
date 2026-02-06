@@ -600,7 +600,14 @@ export declare const api: {
         createdAt: number;
         email: string;
         name?: string;
-        plan: "free" | "basic" | "pro" | "team";
+        plan:
+          | "starter"
+          | "pro"
+          | "business"
+          | "custom"
+          | "free"
+          | "basic"
+          | "team";
       }
     >;
     getOrCreateUser: FunctionReference<
@@ -923,6 +930,12 @@ export declare const internal: {
         roomsTransferred: number;
         usersDeleted: number;
       }
+    >;
+    migratePlanNames: FunctionReference<
+      "mutation",
+      "internal",
+      {},
+      { skipped: number; updated: number }
     >;
   };
 };

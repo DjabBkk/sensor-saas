@@ -50,12 +50,12 @@ export const getOrCreateUser = mutation({
       return existingByEmail._id;
     }
 
-    // Create new user with free plan by default
+    // Create new user with starter plan by default
     const userId = await ctx.db.insert("users", {
       authId: args.authId,
       email: args.email,
       name: args.name,
-      plan: "free",
+      plan: "starter",
       createdAt: Date.now(),
     });
 
