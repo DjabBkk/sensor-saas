@@ -18,12 +18,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2 } from "lucide-react";
+import { AlertTriangle, Loader2 } from "lucide-react";
 
 type ConnectDeviceDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   userId: Id<"users">;
+  maxDevices?: number;
+  deviceCount?: number;
 };
 
 type QingpingStepKey =
@@ -46,7 +48,10 @@ export function ConnectDeviceDialog({
   open,
   onOpenChange,
   userId,
+  maxDevices,
+  deviceCount,
 }: ConnectDeviceDialogProps) {
+  const isAtLimit = maxDevices !== undefined && deviceCount !== undefined && deviceCount >= maxDevices;
   const hasQingpingCredentials = useQuery(
     api.providers.hasProviderCredentials,
     open ? { userId, provider: "qingping" } : "skip",
@@ -195,7 +200,36 @@ export function ConnectDeviceDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
-        {isBrandStep ? (
+        {isAtLimit && isBrandStep ? (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                Sensor limit reached
+              </DialogTitle>
+              <DialogDescription>
+                You&apos;ve reached the maximum of {maxDevices} sensor{maxDevices === 1 ? "" : "s"} on your current plan.
+                Upgrade to add more sensors.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-muted-foreground">
+              <p>
+                <strong className="text-foreground">
+                  {deviceCount}/{maxDevices}
+                </strong>{" "}
+                sensors used on your current plan.
+              </p>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Close
+              </Button>
+              <Button asChild>
+                <a href="/dashboard/account">Upgrade</a>
+              </Button>
+            </DialogFooter>
+          </>
+        ) : isBrandStep ? (
           <>
             <DialogHeader>
               <DialogTitle>Connect a device</DialogTitle>

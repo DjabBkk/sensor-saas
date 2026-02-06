@@ -10,6 +10,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { Sidebar } from "./_components/Sidebar";
 import { AddDeviceDialog } from "./_components/AddDeviceDialog";
 import { AddDeviceDialogProvider } from "./_components/add-device-context";
+import { getPlanLimits, type Plan } from "@/convex/lib/planLimits";
 
 export default function DashboardLayout({
   children,
@@ -75,6 +76,12 @@ export default function DashboardLayout({
     api.rooms.list,
     convexUserId ? { userId: convexUserId } : "skip"
   );
+  const convexUser = useQuery(
+    api.users.getCurrentUser,
+    userId ? { authId: userId } : "skip"
+  );
+  const plan = (convexUser?.plan ?? "starter") as Plan;
+  const maxDevices = getPlanLimits(plan).maxDevices;
 
   if (!isLoaded || !convexUserId) {
     return (
@@ -91,6 +98,7 @@ export default function DashboardLayout({
           devices={devices ?? []}
           rooms={rooms ?? []}
           userId={convexUserId}
+          maxDevices={maxDevices}
           onAddDevice={() => setAddDeviceOpen(true)}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
@@ -100,6 +108,8 @@ export default function DashboardLayout({
           open={addDeviceOpen}
           onOpenChange={setAddDeviceOpen}
           userId={convexUserId}
+          maxDevices={maxDevices}
+          deviceCount={devices?.length ?? 0}
         />
       </div>
     </AddDeviceDialogProvider>

@@ -11,6 +11,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { getDeviceStatus, formatDuration } from "@/lib/deviceStatus";
+import { getPlanLimits, type Plan } from "@/convex/lib/planLimits";
 import {
   getPM25Level,
   getPM10Level,
@@ -66,6 +67,14 @@ export default function DashboardPage() {
     api.devices.list,
     convexUserId ? { userId: convexUserId } : "skip"
   );
+  const convexUser = useQuery(
+    api.users.getCurrentUser,
+    userId ? { authId: userId } : "skip"
+  );
+  const plan = (convexUser?.plan ?? "starter") as Plan;
+  const maxDevices = getPlanLimits(plan).maxDevices;
+  const deviceCount = devices?.length ?? 0;
+  const isAtLimit = deviceCount >= maxDevices;
 
   if (!convexUserId) {
     return null;
@@ -75,10 +84,20 @@ export default function DashboardPage() {
     <div className="p-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="mt-1 text-muted-foreground">
-          Overview of your air quality monitors
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Dashboard</h1>
+            <p className="mt-1 text-muted-foreground">
+              Overview of your air quality monitors
+            </p>
+          </div>
+          <Badge
+            variant="outline"
+            className={`text-sm ${isAtLimit ? "border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400" : ""}`}
+          >
+            {deviceCount}/{maxDevices} sensor{maxDevices === 1 ? "" : "s"}
+          </Badge>
+        </div>
       </div>
 
       {/* Empty State */}

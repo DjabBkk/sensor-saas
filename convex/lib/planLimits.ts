@@ -96,6 +96,13 @@ export function getDefaultRefreshInterval(plan: Plan): number {
 }
 
 /**
+ * Get the maximum number of devices allowed for a plan.
+ */
+export function getMaxDevices(plan: Plan): number {
+  return getPlanLimits(plan).maxDevices;
+}
+
+/**
  * Validate if a refresh interval is allowed for a plan.
  */
 export function isValidRefreshInterval(plan: Plan, intervalSeconds: number): boolean {

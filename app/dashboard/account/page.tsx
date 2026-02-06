@@ -23,6 +23,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import { User, CreditCard, Link2, LogOut, CheckCircle, XCircle, Trash2, AlertTriangle, Loader2 } from "lucide-react";
+import { getPlanLimits, type Plan } from "@/convex/lib/planLimits";
 
 export default function AccountPage() {
   const router = useRouter();
@@ -61,6 +62,15 @@ export default function AccountPage() {
     api.devices.list,
     convexUserId ? { userId: convexUserId } : "skip"
   );
+
+  const embedTokens = useQuery(
+    api.embedTokens.listForUser,
+    convexUserId ? { userId: convexUserId } : "skip"
+  );
+
+  const plan = (convexUser?.plan ?? "starter") as Plan;
+  const limits = getPlanLimits(plan);
+  const activeWidgets = embedTokens?.filter((t) => !t.isRevoked)?.length ?? 0;
 
   const initials = user?.fullName
     ?.split(" ")
@@ -177,16 +187,26 @@ export default function AccountPage() {
           <Separator />
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-1">
-              <p className="text-2xl font-bold">{devices?.length ?? 0}</p>
-              <p className="text-sm text-muted-foreground">Devices Connected</p>
+              <p className="text-2xl font-bold">
+                {devices?.length ?? 0}
+                <span className="text-base font-normal text-muted-foreground">/{limits.maxDevices}</span>
+              </p>
+              <p className="text-sm text-muted-foreground">Sensors</p>
             </div>
             <div className="space-y-1">
-              <p className="text-2xl font-bold">7</p>
+              <p className="text-2xl font-bold">
+                {limits.maxHistoryDays === Infinity ? "Unlimited" : limits.maxHistoryDays}
+              </p>
               <p className="text-sm text-muted-foreground">Days of History</p>
             </div>
             <div className="space-y-1">
-              <p className="text-2xl font-bold">1</p>
-              <p className="text-sm text-muted-foreground">Embed Widgets</p>
+              <p className="text-2xl font-bold">
+                {activeWidgets}
+                <span className="text-base font-normal text-muted-foreground">
+                  /{limits.maxWidgets === Infinity ? "\u221E" : limits.maxWidgets}
+                </span>
+              </p>
+              <p className="text-sm text-muted-foreground">Widgets</p>
             </div>
           </div>
         </CardContent>

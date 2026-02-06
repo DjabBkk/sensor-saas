@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 import { internal } from "./_generated/api";
 import { providerValidator } from "./lib/validators";
+import { getMaxDevices, type Plan } from "./lib/planLimits";
 
 const deviceShape = v.object({
   _id: v.id("devices"),
@@ -264,6 +265,23 @@ export const upsertFromProvider = internalMutation({
       return existing._id;
     }
 
+    // Enforce device limit before creating a new device from provider sync
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    const plan = user.plan as Plan;
+    const maxDevices = getMaxDevices(plan);
+    const currentDevices = await ctx.db
+      .query("devices")
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .collect();
+    if (currentDevices.length >= maxDevices) {
+      throw new Error(
+        `[plan limit] User at device limit (${maxDevices}) on ${plan} plan. Skipping device ${args.providerDeviceId}.`
+      );
+    }
+
     return await ctx.db.insert("devices", {
       userId: args.userId,
       provider: args.provider,
@@ -356,6 +374,23 @@ export const addByMac = mutation({
       
       // Delete the orphaned device
       await ctx.db.delete(existing._id);
+    }
+
+    // Enforce device limit before creating a new device
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    const plan = user.plan as Plan;
+    const maxDevices = getMaxDevices(plan);
+    const currentDevices = await ctx.db
+      .query("devices")
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .collect();
+    if (currentDevices.length >= maxDevices) {
+      throw new Error(
+        `You've reached the maximum of ${maxDevices} sensor${maxDevices === 1 ? "" : "s"} on your ${plan} plan. Upgrade to add more.`
+      );
     }
 
     // Create new device

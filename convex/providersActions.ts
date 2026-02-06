@@ -166,15 +166,23 @@ export const syncDevicesForUser = internalAction({
         continue;
       }
 
-      await ctx.runMutation(internal.devices.upsertFromProvider, {
-        userId: args.userId,
-        provider: args.provider,
-        providerDeviceId: normalized.providerDeviceId,
-        name: normalized.name,
-        model: normalized.model,
-        timezone: normalized.timezone,
-        providerOffline: device.status?.offline ?? false,
-      });
+      try {
+        await ctx.runMutation(internal.devices.upsertFromProvider, {
+          userId: args.userId,
+          provider: args.provider,
+          providerDeviceId: normalized.providerDeviceId,
+          name: normalized.name,
+          model: normalized.model,
+          timezone: normalized.timezone,
+          providerOffline: device.status?.offline ?? false,
+        });
+      } catch (error: any) {
+        if (error?.message?.includes("[plan limit]")) {
+          console.log("[syncDevicesForUser]", error.message);
+          continue;
+        }
+        throw error;
+      }
 
       const reading = qingping.mapQingpingReading(device.data);
       if (reading) {
@@ -575,15 +583,23 @@ export const pollAllReadings = internalAction({
           continue;
         }
 
-        await ctx.runMutation(internal.devices.upsertFromProvider, {
-          userId: config.userId,
-          provider: config.provider,
-          providerDeviceId: device.info.mac,
-          name: device.info.name,
-          model: device.product?.en_name ?? device.product?.name,
-          timezone: undefined,
-          providerOffline: device.status?.offline ?? false,
-        });
+        try {
+          await ctx.runMutation(internal.devices.upsertFromProvider, {
+            userId: config.userId,
+            provider: config.provider,
+            providerDeviceId: device.info.mac,
+            name: device.info.name,
+            model: device.product?.en_name ?? device.product?.name,
+            timezone: undefined,
+            providerOffline: device.status?.offline ?? false,
+          });
+        } catch (upsertError: any) {
+          if (upsertError?.message?.includes("[plan limit]")) {
+            console.log("[POLLING]", upsertError.message);
+            continue;
+          }
+          throw upsertError;
+        }
 
         const deviceInfo = await ctx.runQuery(
           internal.devices.getByProviderDeviceId,

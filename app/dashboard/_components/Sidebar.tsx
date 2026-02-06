@@ -53,6 +53,7 @@ type SidebarProps = {
   devices: Device[];
   rooms: Room[];
   userId: Id<"users">;
+  maxDevices: number;
   onAddDevice?: () => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -74,11 +75,13 @@ export function Sidebar({
   devices,
   rooms,
   userId,
+  maxDevices,
   onAddDevice,
   isCollapsed = false,
   onToggleCollapse,
 }: SidebarProps) {
   const pathname = usePathname();
+  const isAtDeviceLimit = devices.length >= maxDevices;
 
   // Group devices by room
   const devicesByRoom = devices.reduce(
@@ -176,8 +179,11 @@ export function Sidebar({
               <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 Devices
               </span>
-              <Badge variant="secondary" className="text-xs">
-                {devices.length}
+              <Badge
+                variant="secondary"
+                className={`text-xs ${isAtDeviceLimit ? "border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400" : ""}`}
+              >
+                {devices.length}/{maxDevices}
               </Badge>
             </div>
           )}
@@ -231,17 +237,29 @@ export function Sidebar({
           )}
 
           {/* Add Device Button */}
-          <Button
-            variant="outline"
-            size="sm"
-            className={`mt-4 w-full gap-2 hover:bg-accent/50 ${
-              isCollapsed ? "px-2" : ""
-            }`}
-            onClick={onAddDevice}
-          >
-            <Plus className="h-4 w-4" />
-            {!isCollapsed && "Add Device"}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={`w-full gap-2 hover:bg-accent/50 ${
+                    isCollapsed ? "px-2" : ""
+                  }`}
+                  onClick={onAddDevice}
+                  disabled={isAtDeviceLimit}
+                >
+                  <Plus className="h-4 w-4" />
+                  {!isCollapsed && (isAtDeviceLimit ? "Sensor limit reached" : "Add Device")}
+                </Button>
+              </div>
+            </TooltipTrigger>
+            {isAtDeviceLimit && (
+              <TooltipContent side="right">
+                <p>Upgrade your plan to add more sensors</p>
+              </TooltipContent>
+            )}
+          </Tooltip>
         </div>
 
         <Separator />
