@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "convex/react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useConvex, useQuery } from "convex/react";
 import { Id } from "@/convex/_generated/dataModel";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -34,9 +34,10 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { Area, AreaChart, CartesianGrid, ReferenceArea, XAxis, YAxis } from "recharts";
-import { Settings } from "lucide-react";
+import { Download, Loader2, Settings } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { type Plan } from "@/convex/lib/planLimits";
+import { getPlanLimits, type Plan } from "@/convex/lib/planLimits";
+import { generateCsvContent, downloadCsv } from "@/lib/csvExport";
 
 type Reading = {
   _id: Id<"readings">;
@@ -461,6 +462,70 @@ export function DeviceCard({ device, reading, userPlan }: DeviceCardProps) {
     voc: { label: "TVOC", color: METRIC_COLORS.voc },
   };
 
+  // --- CSV Export ---
+  const convex = useConvex();
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportCsv = useCallback(async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const result = await convex.query(api.readings.forExport, {
+        userId: device.userId,
+        deviceId: device._id,
+        startTs: timeRangeMs.startTs,
+        endTs: timeRangeMs.endTs,
+      });
+
+      if (result.readings.length === 0) {
+        alert("No data to export for this time range.");
+        return;
+      }
+
+      const csvContent = generateCsvContent(result.readings, device.name);
+      const rangeDays =
+        TIME_RANGES[timeRange as keyof typeof TIME_RANGES]?.label ?? timeRange;
+      const safeDeviceName = device.name.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const filename = `${safeDeviceName}_${rangeDays.replace(/\s+/g, "-")}_${dateStr}.csv`;
+
+      downloadCsv(csvContent, filename);
+
+      if (result.hitLimit) {
+        alert(
+          "Export was capped at 10,000 readings. Try a shorter time range for a complete export.",
+        );
+      }
+    } catch (err) {
+      console.error("CSV export failed:", err);
+      alert("Export failed. Please try again.");
+    } finally {
+      setIsExporting(false);
+    }
+  }, [
+    isExporting,
+    convex,
+    device.userId,
+    device._id,
+    device.name,
+    timeRangeMs.startTs,
+    timeRangeMs.endTs,
+    timeRange,
+  ]);
+
+  // Check if the selected time range exceeds the user's retention window
+  const retentionWarning = useMemo(() => {
+    if (!userPlan) return null;
+    const limits = getPlanLimits(userPlan);
+    if (limits.maxHistoryDays === Infinity) return null;
+    const range = TIME_RANGES[timeRange as keyof typeof TIME_RANGES];
+    if (!range) return null;
+    if (range.days > limits.maxHistoryDays) {
+      return `Export limited to ${limits.maxHistoryDays} days on ${userPlan.charAt(0).toUpperCase() + userPlan.slice(1)} plan`;
+    }
+    return null;
+  }, [userPlan, timeRange]);
+
   return (
     <div className="space-y-6">
       {/* Device Header */}
@@ -648,7 +713,29 @@ export function DeviceCard({ device, reading, userPlan }: DeviceCardProps) {
                   ))}
                 </SelectContent>
               </Select>
+
+              {/* Export CSV button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportCsv}
+                disabled={isExporting || historyData.length === 0}
+                className="gap-1.5"
+                title={retentionWarning ?? "Download readings as CSV"}
+              >
+                {isExporting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+                {isExporting ? "Exporting…" : "CSV"}
+              </Button>
             </div>
+            {retentionWarning && (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                {retentionWarning}
+              </p>
+            )}
           </CardHeader>
           <CardContent className="px-2 pt-4 pr-8 sm:px-6 sm:pr-12 sm:pt-6">
             {hasChartMetrics && historyData.length > 0 ? (

@@ -122,6 +122,14 @@ export function getMaxKiosks(plan: Plan): number {
 }
 
 /**
+ * Get the maximum history retention in days for a plan.
+ * Returns Infinity for unlimited retention.
+ */
+export function getMaxHistoryDays(plan: Plan): number {
+  return getPlanLimits(plan).maxHistoryDays;
+}
+
+/**
  * Validate if a refresh interval is allowed for a plan.
  */
 export function isValidRefreshInterval(plan: Plan, intervalSeconds: number): boolean {

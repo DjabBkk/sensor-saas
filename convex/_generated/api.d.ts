@@ -459,6 +459,37 @@ export declare const api: {
     >;
   };
   readings: {
+    forExport: FunctionReference<
+      "query",
+      "public",
+      {
+        deviceId: Id<"devices">;
+        endTs: number;
+        startTs: number;
+        userId: Id<"users">;
+      },
+      {
+        clampedStart: number;
+        hitLimit: boolean;
+        readings: Array<{
+          _creationTime: number;
+          _id: Id<"readings">;
+          aqi?: number;
+          battery?: number;
+          co2?: number;
+          deviceId: Id<"devices">;
+          deviceName?: string;
+          pm10?: number;
+          pm25?: number;
+          pressure?: number;
+          rh?: number;
+          tempC?: number;
+          ts: number;
+          voc?: number;
+        }>;
+        wasClamped: boolean;
+      }
+    >;
     history: FunctionReference<
       "query",
       "public",
@@ -621,6 +652,15 @@ export declare const api: {
  * ```
  */
 export declare const internal: {
+  cleanup: {
+    cleanupDeviceReadings: FunctionReference<
+      "mutation",
+      "internal",
+      { cutoffTs: number; deviceId: Id<"devices"> },
+      null
+    >;
+    cleanupExpiredReadings: FunctionReference<"mutation", "internal", {}, null>;
+  };
   devices: {
     getByProviderDeviceId: FunctionReference<
       "query",

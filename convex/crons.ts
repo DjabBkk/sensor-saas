@@ -17,4 +17,11 @@ crons.interval(
   {},
 );
 
+crons.daily(
+  "cleanup-expired-readings",
+  { hourUTC: 3, minuteUTC: 0 },
+  internal.cleanup.cleanupExpiredReadings,
+  {},
+);
+
 export default crons;

@@ -1,5 +1,6 @@
 import { internalMutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { getPlanLimits, type Plan } from "./lib/planLimits";
 
 const readingShape = v.object({
   _id: v.id("readings"),
@@ -48,6 +49,25 @@ const createAccumulator = () => ({
 const avgOrNull = (sum: number, count: number) =>
   count > 0 ? sum / count : null;
 
+/**
+ * Compute the earliest allowed startTs based on a device owner's plan retention.
+ * Returns 0 if the plan has unlimited retention or the device/user can't be found.
+ */
+async function clampStartTsForRetention(
+  ctx: { db: { get: (id: any) => Promise<any> } },
+  deviceId: any,
+  startTs: number,
+): Promise<number> {
+  const device = await ctx.db.get(deviceId);
+  if (!device) return startTs;
+  const user = await ctx.db.get(device.userId);
+  if (!user) return startTs;
+  const limits = getPlanLimits(user.plan as Plan);
+  if (limits.maxHistoryDays === Infinity) return startTs;
+  const retentionMs = limits.maxHistoryDays * 24 * 60 * 60 * 1000;
+  return Math.max(startTs, Date.now() - retentionMs);
+}
+
 export const latest = query({
   args: {
     deviceId: v.id("devices"),
@@ -76,13 +96,78 @@ export const history = query({
     const endTs = args.endTs ?? Date.now();
     const limit = args.limit ?? 500;
 
+    // Clamp startTs to the device owner's plan retention window
+    const clampedStart = await clampStartTsForRetention(ctx, args.deviceId, startTs);
+
     return await ctx.db
       .query("readings")
       .withIndex("by_deviceId_and_ts", (q) =>
-        q.eq("deviceId", args.deviceId).gte("ts", startTs).lte("ts", endTs),
+        q.eq("deviceId", args.deviceId).gte("ts", clampedStart).lte("ts", endTs),
       )
       .order("desc")
       .take(limit);
+  },
+});
+
+/**
+ * Fetch readings for CSV export.
+ * - Verifies device belongs to the requesting user.
+ * - Clamps startTs to the user's plan retention window.
+ * - Returns readings in ascending (chronological) order, capped at 10 000.
+ */
+export const forExport = query({
+  args: {
+    userId: v.id("users"),
+    deviceId: v.id("devices"),
+    startTs: v.number(),
+    endTs: v.number(),
+  },
+  returns: v.object({
+    readings: v.array(readingShape),
+    clampedStart: v.number(),
+    wasClamped: v.boolean(),
+    hitLimit: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    // 1. Verify device belongs to user
+    const device = await ctx.db.get(args.deviceId);
+    if (!device || device.userId !== args.userId) {
+      throw new Error("Device not found");
+    }
+
+    // 2. Look up user plan and clamp startTs to retention window
+    const user = await ctx.db.get(args.userId);
+    if (!user) throw new Error("User not found");
+
+    const limits = getPlanLimits(user.plan as Plan);
+    const retentionMs =
+      limits.maxHistoryDays === Infinity
+        ? Infinity
+        : limits.maxHistoryDays * 24 * 60 * 60 * 1000;
+    const minAllowedStart =
+      retentionMs === Infinity ? 0 : Date.now() - retentionMs;
+    const clampedStart = Math.max(args.startTs, minAllowedStart);
+    const wasClamped = clampedStart > args.startTs;
+
+    // 3. Fetch readings in chronological order (safety cap 10 000)
+    const EXPORT_LIMIT = 10_000;
+    const readings = await ctx.db
+      .query("readings")
+      .withIndex("by_deviceId_and_ts", (q) =>
+        q
+          .eq("deviceId", args.deviceId)
+          .gte("ts", clampedStart)
+          .lte("ts", args.endTs),
+      )
+      .order("asc")
+      .take(EXPORT_LIMIT);
+
+    return {
+      readings,
+      clampedStart,
+      wasClamped,
+      hitLimit: readings.length >= EXPORT_LIMIT,
+    };
   },
 });
 
@@ -116,11 +201,14 @@ export const historyAggregated = query({
       throw new Error("endTs must be greater than startTs");
     }
 
+    // Clamp startTs to the device owner's plan retention window
+    const clampedStart = await clampStartTsForRetention(ctx, args.deviceId, args.startTs);
+
     const bucketMs = args.bucketMinutes * 60 * 1000;
     const readings = await ctx.db
       .query("readings")
       .withIndex("by_deviceId_and_ts", (q) =>
-        q.eq("deviceId", args.deviceId).gte("ts", args.startTs).lte("ts", args.endTs),
+        q.eq("deviceId", args.deviceId).gte("ts", clampedStart).lte("ts", args.endTs),
       )
       .order("asc")
       .collect();
