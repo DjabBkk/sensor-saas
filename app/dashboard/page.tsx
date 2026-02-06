@@ -1,9 +1,7 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
-import { useAuth, useUser } from "@clerk/nextjs";
-import { useMutation, useQuery } from "convex/react";
-import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
+import { useQuery } from "convex/react";
 import Link from "next/link";
 
 import { api } from "@/convex/_generated/api";
@@ -26,59 +24,20 @@ import { SecondaryMetricItem, type MetricKey } from "@/components/ui/secondary-m
 import { Plus, Settings } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useAddDeviceDialog } from "./_components/add-device-context";
+import { useDashboardContext } from "./_components/dashboard-context";
 import { DeviceSettingsDialog } from "@/app/dashboard/_components/DeviceSettingsDialog";
 
 export default function DashboardPage() {
-  const router = useRouter();
-  const { isLoaded, userId } = useAuth();
-  const { user } = useUser();
-  const getOrCreateUser = useMutation(api.users.getOrCreateUser);
+  const { convexUserId, organizationId, orgPlan } = useDashboardContext();
   const { openDialog } = useAddDeviceDialog();
-  const [convexUserId, setConvexUserId] = useState<Id<"users"> | null>(null);
-
-  useEffect(() => {
-    if (!isLoaded) return;
-    if (!userId) {
-      router.replace("/login");
-      return;
-    }
-    if (convexUserId || !user) return;
-
-    const email = user.primaryEmailAddress?.emailAddress;
-    if (!email) return;
-
-    let cancelled = false;
-    getOrCreateUser({
-      authId: userId,
-      email,
-      name: user.fullName ?? undefined,
-    })
-      .then((id) => {
-        if (!cancelled) setConvexUserId(id);
-      })
-      .catch(console.error);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isLoaded, userId, user, convexUserId, getOrCreateUser, router]);
 
   const devices = useQuery(
     api.devices.list,
-    convexUserId ? { userId: convexUserId } : "skip"
+    { organizationId }
   );
-  const convexUser = useQuery(
-    api.users.getCurrentUser,
-    userId ? { authId: userId } : "skip"
-  );
-  const plan = (convexUser?.plan ?? "starter") as Plan;
-  const maxDevices = getPlanLimits(plan).maxDevices;
+  const maxDevices = getPlanLimits(orgPlan).maxDevices;
   const deviceCount = devices?.length ?? 0;
   const isAtLimit = deviceCount >= maxDevices;
-
-  if (!convexUserId) {
-    return null;
-  }
 
   return (
     <div className="p-8">
@@ -127,7 +86,8 @@ export default function DashboardPage() {
               key={device._id}
               device={device}
               userId={convexUserId}
-              userPlan={plan}
+              organizationId={organizationId}
+              userPlan={orgPlan}
             />
           ))}
         </div>
@@ -140,6 +100,7 @@ export default function DashboardPage() {
 function DeviceOverviewCard({
   device,
   userId,
+  organizationId,
   userPlan,
 }: {
   device: {
@@ -155,8 +116,10 @@ function DeviceOverviewCard({
     secondaryMetrics?: string[];
     hiddenMetrics?: string[];
     reportInterval?: number;
+    createdAt: number;
   };
   userId: Id<"users">;
+  organizationId: Id<"organizations">;
   userPlan: Plan;
 }) {
   const reading = useQuery(api.readings.latest, { deviceId: device._id });
@@ -396,6 +359,7 @@ function DeviceOverviewCard({
       <DeviceSettingsDialog
         deviceId={device._id}
         userId={userId}
+        organizationId={organizationId}
         deviceName={device.name}
         hiddenMetrics={device.hiddenMetrics}
         availableMetrics={availableMetricKeys}
@@ -415,4 +379,3 @@ function DeviceOverviewCard({
     </>
   );
 }
-

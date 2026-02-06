@@ -13,6 +13,7 @@ const providerConfigShape = v.object({
   _id: v.id("providerConfigs"),
   _creationTime: v.number(),
   userId: v.id("users"),
+  organizationId: v.optional(v.id("organizations")),
   provider: providerValidator,
   accessToken: v.string(),
   tokenExpiresAt: v.number(),
@@ -22,35 +23,56 @@ const providerConfigShape = v.object({
   lastSyncAt: v.optional(v.number()),
 });
 
+/**
+ * Get provider config by organization + provider.
+ * Falls back to userId-based lookup for pre-migration data.
+ */
 export const getConfig = internalQuery({
   args: {
-    userId: v.id("users"),
+    organizationId: v.optional(v.id("organizations")),
+    userId: v.optional(v.id("users")),
     provider: providerValidator,
   },
   returns: v.union(v.null(), providerConfigShape),
   handler: async (ctx, args) => {
-    return await ctx.db
-      .query("providerConfigs")
-      .withIndex("by_userId_and_provider", (q) =>
-        q.eq("userId", args.userId).eq("provider", args.provider),
-      )
-      .unique();
+    // Prefer organization-based lookup
+    if (args.organizationId) {
+      const config = await ctx.db
+        .query("providerConfigs")
+        .withIndex("by_organizationId_and_provider", (q) =>
+          q.eq("organizationId", args.organizationId).eq("provider", args.provider),
+        )
+        .first();
+      if (config) return config;
+    }
+
+    // Fall back to userId-based lookup
+    if (args.userId) {
+      return await ctx.db
+        .query("providerConfigs")
+        .withIndex("by_userId_and_provider", (q) =>
+          q.eq("userId", args.userId!).eq("provider", args.provider),
+        )
+        .unique();
+    }
+
+    return null;
   },
 });
 
 export const hasProviderCredentials = query({
   args: {
-    userId: v.id("users"),
+    organizationId: v.id("organizations"),
     provider: providerValidator,
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
     const config = await ctx.db
       .query("providerConfigs")
-      .withIndex("by_userId_and_provider", (q) =>
-        q.eq("userId", args.userId).eq("provider", args.provider),
+      .withIndex("by_organizationId_and_provider", (q) =>
+        q.eq("organizationId", args.organizationId).eq("provider", args.provider),
       )
-      .unique();
+      .first();
     return Boolean(config?.appKey && config?.appSecret);
   },
 });
@@ -58,6 +80,7 @@ export const hasProviderCredentials = query({
 export const connect = mutation({
   args: {
     userId: v.id("users"),
+    organizationId: v.id("organizations"),
     provider: providerValidator,
     appKey: v.string(),
     appSecret: v.string(),
@@ -72,6 +95,7 @@ export const connect = mutation({
     // Schedule the connection process as an action
     await ctx.scheduler.runAfter(0, internal.providersActions.connectAndSync, {
       userId: args.userId,
+      organizationId: args.organizationId,
       provider: args.provider,
       appKey: args.appKey,
       appSecret: args.appSecret,
@@ -135,6 +159,7 @@ export const updateConfig = internalMutation({
 export const insertConfig = internalMutation({
   args: {
     userId: v.id("users"),
+    organizationId: v.optional(v.id("organizations")),
     provider: providerValidator,
     accessToken: v.string(),
     tokenExpiresAt: v.number(),
@@ -146,6 +171,7 @@ export const insertConfig = internalMutation({
   handler: async (ctx, args) => {
     await ctx.db.insert("providerConfigs", {
       userId: args.userId,
+      organizationId: args.organizationId,
       provider: args.provider,
       accessToken: args.accessToken,
       tokenExpiresAt: args.tokenExpiresAt,

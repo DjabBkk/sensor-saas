@@ -24,6 +24,7 @@ type ConnectDeviceDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   userId: Id<"users">;
+  organizationId: Id<"organizations">;
   maxDevices?: number;
   deviceCount?: number;
 };
@@ -48,21 +49,22 @@ export function ConnectDeviceDialog({
   open,
   onOpenChange,
   userId,
+  organizationId,
   maxDevices,
   deviceCount,
 }: ConnectDeviceDialogProps) {
   const isAtLimit = maxDevices !== undefined && deviceCount !== undefined && deviceCount >= maxDevices;
   const hasQingpingCredentials = useQuery(
     api.providers.hasProviderCredentials,
-    open ? { userId, provider: "qingping" } : "skip",
+    open ? { organizationId, provider: "qingping" } : "skip",
   );
   const hasQingpingDevice = useQuery(
     api.devices.hasQingpingDevice,
-    open ? { userId } : "skip",
+    open ? { organizationId } : "skip",
   );
   const connectProvider = useMutation(api.providers.connect);
   const addDevice = useMutation(api.devices.addByMac);
-  const syncDevices = useAction(api.providersActions.syncDevicesForUserPublic);
+  const syncDevices = useAction(api.providersActions.syncDevicesForOrgPublic);
 
   const [isBrandStep, setIsBrandStep] = useState(true);
   const [stepIndex, setStepIndex] = useState(0);
@@ -174,6 +176,7 @@ export function ConnectDeviceDialog({
       if (!hasQingpingCredentials) {
         await connectProvider({
           userId,
+          organizationId,
           provider: "qingping",
           appKey: appKey.trim(),
           appSecret: appSecret.trim(),
@@ -182,12 +185,13 @@ export function ConnectDeviceDialog({
 
       await addDevice({
         userId,
+        organizationId,
         name: deviceName.trim(),
         macAddress: normalizedMac,
         provider: "qingping",
       });
 
-      await syncDevices({ userId, provider: "qingping" });
+      await syncDevices({ userId, organizationId, provider: "qingping" });
 
       onOpenChange(false);
     } catch (err) {

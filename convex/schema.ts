@@ -1,27 +1,50 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
-import { planValidator, providerValidator } from "./lib/validators";
+import { orgRoleValidator, planValidator, providerValidator } from "./lib/validators";
 
 export default defineSchema({
   users: defineTable({
     authId: v.string(),
     email: v.string(),
     name: v.optional(v.string()),
-    plan: planValidator,
+    plan: v.optional(planValidator), // kept for backward compat; canonical plan lives on organizations
     createdAt: v.number(),
   })
     .index("by_authId", ["authId"])
     .index("by_email", ["email"]),
 
+  organizations: defineTable({
+    clerkOrgId: v.optional(v.string()), // Clerk organization ID (null for personal orgs created before Clerk Orgs)
+    name: v.string(),
+    plan: planValidator,
+    isPersonal: v.boolean(), // true for auto-created single-user orgs
+    createdAt: v.number(),
+  })
+    .index("by_clerkOrgId", ["clerkOrgId"]),
+
+  orgMembers: defineTable({
+    organizationId: v.id("organizations"),
+    userId: v.id("users"),
+    role: orgRoleValidator,
+    joinedAt: v.number(),
+  })
+    .index("by_organizationId", ["organizationId"])
+    .index("by_userId", ["userId"])
+    .index("by_orgId_and_userId", ["organizationId", "userId"]),
+
   rooms: defineTable({
     userId: v.id("users"),
+    organizationId: v.optional(v.id("organizations")),
     name: v.string(),
     createdAt: v.number(),
-  }).index("by_userId", ["userId"]),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_organizationId", ["organizationId"]),
 
   devices: defineTable({
     userId: v.id("users"),
+    organizationId: v.optional(v.id("organizations")),
     roomId: v.optional(v.id("rooms")),
     provider: providerValidator,
     providerDeviceId: v.string(),
@@ -41,6 +64,7 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_userId", ["userId"])
+    .index("by_organizationId", ["organizationId"])
     .index("by_provider_and_providerDeviceId", ["provider", "providerDeviceId"]),
 
   intervalChanges: defineTable({
@@ -69,6 +93,7 @@ export default defineSchema({
 
   providerConfigs: defineTable({
     userId: v.id("users"),
+    organizationId: v.optional(v.id("organizations")),
     provider: providerValidator,
     accessToken: v.string(),
     tokenExpiresAt: v.number(),
@@ -78,10 +103,13 @@ export default defineSchema({
     lastSyncAt: v.optional(v.number()),
   })
     .index("by_userId", ["userId"])
-    .index("by_userId_and_provider", ["userId", "provider"]),
+    .index("by_userId_and_provider", ["userId", "provider"])
+    .index("by_organizationId", ["organizationId"])
+    .index("by_organizationId_and_provider", ["organizationId", "provider"]),
 
   embedTokens: defineTable({
     userId: v.id("users"),
+    organizationId: v.optional(v.id("organizations")),
     deviceId: v.id("devices"),
     token: v.string(),
     label: v.optional(v.string()),
@@ -98,10 +126,12 @@ export default defineSchema({
   })
     .index("by_token", ["token"])
     .index("by_deviceId", ["deviceId"])
-    .index("by_userId", ["userId"]),
+    .index("by_userId", ["userId"])
+    .index("by_organizationId", ["organizationId"]),
 
   kioskConfigs: defineTable({
     userId: v.id("users"),
+    organizationId: v.optional(v.id("organizations")),
     token: v.string(),
     label: v.optional(v.string()),
     title: v.optional(v.string()),
@@ -119,18 +149,25 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_token", ["token"])
-    .index("by_userId", ["userId"]),
+    .index("by_userId", ["userId"])
+    .index("by_organizationId", ["organizationId"]),
 
   deletedDevices: defineTable({
     userId: v.id("users"),
+    organizationId: v.optional(v.id("organizations")),
     provider: providerValidator,
     providerDeviceId: v.string(),
     deletedAt: v.number(),
   })
     .index("by_userId_and_provider_and_providerDeviceId", [
-    "userId",
-    "provider",
-    "providerDeviceId",
+      "userId",
+      "provider",
+      "providerDeviceId",
+    ])
+    .index("by_organizationId_and_provider_and_providerDeviceId", [
+      "organizationId",
+      "provider",
+      "providerDeviceId",
     ])
     .index("by_provider_and_providerDeviceId", ["provider", "providerDeviceId"]),
 });

@@ -1,26 +1,23 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { getPlanLimits } from "./lib/planLimits";
+import { getOrgPlan } from "./lib/orgAuth";
 
 /**
  * Generate a presigned upload URL for logo files.
- * Requires that the user's plan allows custom branding.
+ * Requires that the organization's plan allows custom branding.
  */
 export const generateUploadUrl = mutation({
   args: {
-    userId: v.id("users"),
+    organizationId: v.id("organizations"),
   },
   returns: v.string(),
   handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
-    if (!user) {
-      throw new Error("User not found.");
-    }
-
-    const limits = getPlanLimits(user.plan);
+    const plan = await getOrgPlan(ctx.db, args.organizationId);
+    const limits = getPlanLimits(plan);
     if (!limits.customBranding) {
       throw new Error(
-        `Custom branding is not available on your ${user.plan} plan. Upgrade to Pro or higher.`,
+        `Custom branding is not available on your ${plan} plan. Upgrade to Pro or higher.`,
       );
     }
 

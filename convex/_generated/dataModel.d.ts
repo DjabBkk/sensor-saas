@@ -30,6 +30,7 @@ export type DataModel = {
   deletedDevices: {
     document: {
       deletedAt: number;
+      organizationId?: Id<"organizations">;
       provider: "qingping" | "purpleair" | "iqair" | "temtop";
       providerDeviceId: string;
       userId: Id<"users">;
@@ -40,12 +41,19 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "deletedAt"
+      | "organizationId"
       | "provider"
       | "providerDeviceId"
       | "userId";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      by_organizationId_and_provider_and_providerDeviceId: [
+        "organizationId",
+        "provider",
+        "providerDeviceId",
+        "_creationTime",
+      ];
       by_provider_and_providerDeviceId: [
         "provider",
         "providerDeviceId",
@@ -72,6 +80,7 @@ export type DataModel = {
       lastReadingAt?: number;
       model?: string;
       name: string;
+      organizationId?: Id<"organizations">;
       primaryMetrics?: Array<string>;
       provider: "qingping" | "purpleair" | "iqair" | "temtop";
       providerDeviceId: string;
@@ -96,6 +105,7 @@ export type DataModel = {
       | "lastReadingAt"
       | "model"
       | "name"
+      | "organizationId"
       | "primaryMetrics"
       | "provider"
       | "providerDeviceId"
@@ -108,6 +118,7 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      by_organizationId: ["organizationId", "_creationTime"];
       by_provider_and_providerDeviceId: [
         "provider",
         "providerDeviceId",
@@ -129,6 +140,7 @@ export type DataModel = {
       isRevoked: boolean;
       label?: string;
       logoStorageId?: Id<"_storage">;
+      organizationId?: Id<"organizations">;
       refreshInterval?: number;
       size?: "small" | "medium" | "large";
       token: string;
@@ -148,6 +160,7 @@ export type DataModel = {
       | "isRevoked"
       | "label"
       | "logoStorageId"
+      | "organizationId"
       | "refreshInterval"
       | "size"
       | "token"
@@ -156,6 +169,7 @@ export type DataModel = {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_deviceId: ["deviceId", "_creationTime"];
+      by_organizationId: ["organizationId", "_creationTime"];
       by_token: ["token", "_creationTime"];
       by_userId: ["userId", "_creationTime"];
     };
@@ -197,6 +211,7 @@ export type DataModel = {
       label?: string;
       logoStorageId?: Id<"_storage">;
       mode: "single" | "multi";
+      organizationId?: Id<"organizations">;
       refreshInterval: number;
       theme: "dark" | "light";
       title?: string;
@@ -218,6 +233,7 @@ export type DataModel = {
       | "label"
       | "logoStorageId"
       | "mode"
+      | "organizationId"
       | "refreshInterval"
       | "theme"
       | "title"
@@ -227,7 +243,60 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      by_organizationId: ["organizationId", "_creationTime"];
       by_token: ["token", "_creationTime"];
+      by_userId: ["userId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  organizations: {
+    document: {
+      clerkOrgId?: string;
+      createdAt: number;
+      isPersonal: boolean;
+      name: string;
+      plan: "starter" | "pro" | "business" | "custom";
+      _id: Id<"organizations">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "clerkOrgId"
+      | "createdAt"
+      | "isPersonal"
+      | "name"
+      | "plan";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_clerkOrgId: ["clerkOrgId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  orgMembers: {
+    document: {
+      joinedAt: number;
+      organizationId: Id<"organizations">;
+      role: "owner" | "admin" | "member";
+      userId: Id<"users">;
+      _id: Id<"orgMembers">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "joinedAt"
+      | "organizationId"
+      | "role"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_orgId_and_userId: ["organizationId", "userId", "_creationTime"];
+      by_organizationId: ["organizationId", "_creationTime"];
       by_userId: ["userId", "_creationTime"];
     };
     searchIndexes: {};
@@ -239,6 +308,7 @@ export type DataModel = {
       appKey?: string;
       appSecret?: string;
       lastSyncAt?: number;
+      organizationId?: Id<"organizations">;
       provider: "qingping" | "purpleair" | "iqair" | "temtop";
       tokenExpiresAt: number;
       userId: Id<"users">;
@@ -253,6 +323,7 @@ export type DataModel = {
       | "appKey"
       | "appSecret"
       | "lastSyncAt"
+      | "organizationId"
       | "provider"
       | "tokenExpiresAt"
       | "userId"
@@ -260,6 +331,12 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      by_organizationId: ["organizationId", "_creationTime"];
+      by_organizationId_and_provider: [
+        "organizationId",
+        "provider",
+        "_creationTime",
+      ];
       by_userId: ["userId", "_creationTime"];
       by_userId_and_provider: ["userId", "provider", "_creationTime"];
     };
@@ -311,14 +388,22 @@ export type DataModel = {
     document: {
       createdAt: number;
       name: string;
+      organizationId?: Id<"organizations">;
       userId: Id<"users">;
       _id: Id<"rooms">;
       _creationTime: number;
     };
-    fieldPaths: "_creationTime" | "_id" | "createdAt" | "name" | "userId";
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "createdAt"
+      | "name"
+      | "organizationId"
+      | "userId";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      by_organizationId: ["organizationId", "_creationTime"];
       by_userId: ["userId", "_creationTime"];
     };
     searchIndexes: {};
@@ -330,7 +415,7 @@ export type DataModel = {
       createdAt: number;
       email: string;
       name?: string;
-      plan: "starter" | "pro" | "business" | "custom";
+      plan?: "starter" | "pro" | "business" | "custom";
       _id: Id<"users">;
       _creationTime: number;
     };

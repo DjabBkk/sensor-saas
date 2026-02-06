@@ -1,10 +1,13 @@
 import { query, mutation, internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { planValidator } from "./lib/validators";
+import { internal } from "./_generated/api";
+import { getPersonalOrg } from "./lib/orgAuth";
 
 /**
  * Get or create a user in Convex based on Clerk auth ID.
  * Called when user first logs in to sync Clerk user to Convex.
+ * Also creates a personal organization if the user doesn't have one.
  * 
  * This handles the case where a user deletes their Clerk account and re-signs up
  * with the same email - we transfer ownership to the new authId.
@@ -31,6 +34,17 @@ export const getOrCreateUser = mutation({
           name: args.name,
         });
       }
+
+      // Ensure user has a personal org
+      const personalOrg = await getPersonalOrg(ctx.db, existingByAuthId._id);
+      if (!personalOrg) {
+        await ctx.scheduler.runAfter(0, internal.organizations.createPersonalOrg, {
+          userId: existingByAuthId._id,
+          name: args.name ? `${args.name}'s workspace` : `${args.email}'s workspace`,
+          plan: (existingByAuthId.plan ?? "starter") as "starter" | "pro" | "business" | "custom",
+        });
+      }
+
       return existingByAuthId._id;
     }
 
@@ -47,6 +61,17 @@ export const getOrCreateUser = mutation({
         authId: args.authId,
         name: args.name,
       });
+
+      // Ensure user has a personal org
+      const personalOrg = await getPersonalOrg(ctx.db, existingByEmail._id);
+      if (!personalOrg) {
+        await ctx.scheduler.runAfter(0, internal.organizations.createPersonalOrg, {
+          userId: existingByEmail._id,
+          name: args.name ? `${args.name}'s workspace` : `${args.email}'s workspace`,
+          plan: (existingByEmail.plan ?? "starter") as "starter" | "pro" | "business" | "custom",
+        });
+      }
+
       return existingByEmail._id;
     }
 
@@ -57,6 +82,13 @@ export const getOrCreateUser = mutation({
       name: args.name,
       plan: "starter",
       createdAt: Date.now(),
+    });
+
+    // Create personal organization for new user
+    await ctx.scheduler.runAfter(0, internal.organizations.createPersonalOrg, {
+      userId,
+      name: args.name ? `${args.name}'s workspace` : `${args.email}'s workspace`,
+      plan: "starter",
     });
 
     return userId;
@@ -78,7 +110,7 @@ export const getCurrentUser = query({
       authId: v.string(),
       email: v.string(),
       name: v.optional(v.string()),
-      plan: planValidator,
+      plan: v.optional(planValidator),
       createdAt: v.number(),
     }),
   ),
@@ -102,7 +134,7 @@ export const getInternal = internalQuery({
     v.null(),
     v.object({
       _id: v.id("users"),
-      plan: planValidator,
+      plan: v.optional(planValidator),
     }),
   ),
   handler: async (ctx, args) => {
@@ -120,6 +152,7 @@ export const getInternal = internalQuery({
  * - All provider configs
  * - All embed tokens
  * - All kiosk configs
+ * - All organization memberships (and personal orgs)
  */
 export const deleteUser = mutation({
   args: {
@@ -224,6 +257,29 @@ export const deleteUser = mutation({
 
     for (const deleted of deletedDevices) {
       await ctx.db.delete(deleted._id);
+    }
+
+    // Delete org memberships and personal orgs
+    const memberships = await ctx.db
+      .query("orgMembers")
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    for (const membership of memberships) {
+      const org = await ctx.db.get(membership.organizationId);
+      // If this is a personal org and user is the only member, delete the org
+      if (org?.isPersonal) {
+        const orgMembers = await ctx.db
+          .query("orgMembers")
+          .withIndex("by_organizationId", (q) =>
+            q.eq("organizationId", membership.organizationId),
+          )
+          .collect();
+        if (orgMembers.length <= 1) {
+          await ctx.db.delete(org._id);
+        }
+      }
+      await ctx.db.delete(membership._id);
     }
 
     // Finally, delete the user
@@ -361,6 +417,26 @@ export const mergeDuplicateUsers = internalMutation({
         kioskConfigsTransferred += 1;
       }
 
+      // Transfer org memberships
+      const memberships = await ctx.db
+        .query("orgMembers")
+        .withIndex("by_userId", (q) => q.eq("userId", user._id))
+        .collect();
+      for (const membership of memberships) {
+        // Check if keepUser is already a member
+        const existing = await ctx.db
+          .query("orgMembers")
+          .withIndex("by_orgId_and_userId", (q) =>
+            q.eq("organizationId", membership.organizationId).eq("userId", args.keepUserId),
+          )
+          .first();
+        if (existing) {
+          await ctx.db.delete(membership._id);
+        } else {
+          await ctx.db.patch(membership._id, { userId: args.keepUserId });
+        }
+      }
+
       // Delete the duplicate user
       await ctx.db.delete(user._id);
       usersDeleted += 1;
@@ -379,6 +455,7 @@ export const mergeDuplicateUsers = internalMutation({
 
 /**
  * Debug-only mutation to switch plans for testing.
+ * Now updates the organization's plan instead of the user's plan.
  * Restricted to karlvonluckwald@gmail.com for safety.
  */
 export const debugSetPlan = mutation({
@@ -393,6 +470,14 @@ export const debugSetPlan = mutation({
     if (user.email !== "karlvonluckwald@gmail.com") {
       throw new Error("Debug plan switching is not available for this account.");
     }
+
+    // Update the user's personal org plan
+    const personalOrg = await getPersonalOrg(ctx.db, args.userId);
+    if (personalOrg) {
+      await ctx.db.patch(personalOrg._id, { plan: args.plan });
+    }
+
+    // Also update user.plan for backward compat
     await ctx.db.patch(args.userId, { plan: args.plan });
     return null;
   },

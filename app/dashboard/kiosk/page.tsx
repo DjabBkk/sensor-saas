@@ -1,9 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAuth, useUser } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 import { api } from "@/convex/_generated/api";
@@ -23,20 +21,17 @@ import { getPlanLimits } from "@/convex/lib/planLimits";
 import { KioskSingle } from "@/components/kiosk/KioskSingle";
 import { KioskGrid } from "@/components/kiosk/KioskGrid";
 import { type BrandingProps } from "@/components/embed/Branding";
+import { useDashboardContext } from "../_components/dashboard-context";
 
 type KioskMode = "single" | "multi";
 type KioskTheme = "dark" | "light";
 
 export default function KioskDashboardPage() {
-  const router = useRouter();
-  const { isLoaded, userId } = useAuth();
-  const { user } = useUser();
-  const getOrCreateUser = useMutation(api.users.getOrCreateUser);
+  const { convexUserId, organizationId, orgPlan } = useDashboardContext();
   const createKiosk = useMutation(api.kioskConfigs.create);
   const revokeKiosk = useMutation(api.kioskConfigs.revoke);
   const generateUploadUrl = useMutation(api.storage.generateUploadUrl);
 
-  const [convexUserId, setConvexUserId] = useState<Id<"users"> | null>(null);
   const [label, setLabel] = useState("");
   const [mode, setMode] = useState<KioskMode>("single");
   const [theme, setTheme] = useState<KioskTheme>("dark");
@@ -56,33 +51,6 @@ export default function KioskDashboardPage() {
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!isLoaded) return;
-    if (!userId) {
-      router.replace("/login");
-      return;
-    }
-    if (convexUserId || !user) return;
-
-    const email = user.primaryEmailAddress?.emailAddress;
-    if (!email) return;
-
-    let cancelled = false;
-    getOrCreateUser({
-      authId: userId,
-      email,
-      name: user.fullName ?? undefined,
-    })
-      .then((id) => {
-        if (!cancelled) setConvexUserId(id);
-      })
-      .catch(console.error);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isLoaded, userId, user, convexUserId, getOrCreateUser, router]);
-
-  useEffect(() => {
     if (typeof window !== "undefined") {
       setOrigin(window.location.origin);
     }
@@ -90,19 +58,15 @@ export default function KioskDashboardPage() {
 
   const devices = useQuery(
     api.devices.list,
-    convexUserId ? { userId: convexUserId } : "skip",
+    { organizationId },
   );
   const kiosks = useQuery(
     api.kioskConfigs.listForUser,
-    convexUserId ? { userId: convexUserId } : "skip",
+    { organizationId },
   );
   const allUserTokens = useQuery(
     api.embedTokens.listForUser,
-    convexUserId ? { userId: convexUserId } : "skip",
-  );
-  const convexUser = useQuery(
-    api.users.getCurrentUser,
-    userId ? { authId: userId } : "skip",
+    { organizationId },
   );
 
   // Get the first selected device's latest reading for preview
@@ -124,7 +88,7 @@ export default function KioskDashboardPage() {
   );
 
   // Limit enforcement — shared or per-type
-  const planLimits = convexUser?.plan ? getPlanLimits(convexUser.plan) : null;
+  const planLimits = getPlanLimits(orgPlan);
   const activeWidgetCount = useMemo(
     () => (allUserTokens ?? []).filter((t) => !t.isRevoked).length,
     [allUserTokens],
@@ -140,7 +104,7 @@ export default function KioskDashboardPage() {
     displayLimit !== null && displayLimit !== Infinity && displayCount >= displayLimit;
   const limitLabel = isSharedLimit ? "widgets & kiosks" : "kiosks";
 
-  // Refresh interval options (same approach as embed page)
+  // Refresh interval options
   const ALL_REFRESH_OPTIONS = [
     { value: 60, label: "1 minute" },
     { value: 5 * 60, label: "5 minutes" },
@@ -158,18 +122,17 @@ export default function KioskDashboardPage() {
   };
 
   const refreshIntervalOptions = useMemo(() => {
-    if (!convexUser?.plan) return [];
-    const minInterval = PLAN_MIN_REFRESH[convexUser.plan] ?? 3600;
+    const minInterval = PLAN_MIN_REFRESH[orgPlan] ?? 3600;
     return ALL_REFRESH_OPTIONS.filter((opt) => opt.value >= minInterval);
-  }, [convexUser?.plan]);
+  }, [orgPlan]);
 
   // Set default refresh interval based on plan
   useEffect(() => {
-    if (convexUser?.plan && refreshInterval === null) {
-      const minInterval = PLAN_MIN_REFRESH[convexUser.plan] ?? 3600;
+    if (orgPlan && refreshInterval === null) {
+      const minInterval = PLAN_MIN_REFRESH[orgPlan] ?? 3600;
       setRefreshInterval(minInterval);
     }
-  }, [convexUser?.plan, refreshInterval]);
+  }, [orgPlan, refreshInterval]);
 
   // Build preview data
   const previewDevices = useMemo(() => {
@@ -192,11 +155,11 @@ export default function KioskDashboardPage() {
 
   const handleLogoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !convexUserId) return;
+    if (!file) return;
 
     setIsUploadingLogo(true);
     try {
-      const uploadUrl = await generateUploadUrl({ userId: convexUserId });
+      const uploadUrl = await generateUploadUrl({ organizationId });
       const result = await fetch(uploadUrl, {
         method: "POST",
         headers: { "Content-Type": file.type },
@@ -210,7 +173,7 @@ export default function KioskDashboardPage() {
     } finally {
       setIsUploadingLogo(false);
     }
-  }, [convexUserId, generateUploadUrl]);
+  }, [organizationId, generateUploadUrl]);
 
   const handleToggleDevice = (deviceId: string) => {
     setSelectedDeviceIds((prev) =>
@@ -221,11 +184,6 @@ export default function KioskDashboardPage() {
   };
 
   const handleCreate = async () => {
-    if (!convexUserId) {
-      setError("User sync not ready yet.");
-      return;
-    }
-
     const deviceIds =
       mode === "single"
         ? selectedDeviceId
@@ -247,6 +205,7 @@ export default function KioskDashboardPage() {
     try {
       await createKiosk({
         userId: convexUserId,
+        organizationId,
         label: label || undefined,
         mode,
         deviceIds: deviceIds as Array<Id<"devices">>,
@@ -593,8 +552,6 @@ export default function KioskDashboardPage() {
                         deviceId: dev._id,
                         deviceName: dev.name,
                         isOnline: true,
-                        // For multi-device, we only have reading data for the first device
-                        // In the actual kiosk, the server fetches all readings
                         pm25: dev._id === previewDeviceId ? previewReading?.pm25 : undefined,
                         co2: dev._id === previewDeviceId ? previewReading?.co2 : undefined,
                         tempC: dev._id === previewDeviceId ? previewReading?.tempC : undefined,

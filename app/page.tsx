@@ -7,6 +7,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import {
   ArrowRight,
   Check,
@@ -72,7 +73,7 @@ export default function Home() {
             </Link>
             <Link href="/signup">
               <Button size="sm" className="shadow-lg shadow-primary/25">
-                Get Started Free
+                Start Free Trial
               </Button>
             </Link>
           </div>
@@ -254,38 +255,42 @@ export default function Home() {
               Simple, transparent pricing
             </h2>
             <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-              Start free and scale as you grow. No hidden fees.
+              Choose the plan that fits your monitoring needs. All plans include a 14-day free trial.
             </p>
           </div>
 
-          <div className="grid gap-8 lg:grid-cols-3 max-w-5xl mx-auto">
+          <div className="grid gap-6 lg:grid-cols-4 md:grid-cols-2 max-w-7xl mx-auto items-start">
             <PricingCard
-              name="Free"
-              price="$0"
-              description="Perfect for getting started"
+              name="Starter"
+              price="$29"
+              period="/month"
+              description="For individuals getting started with air quality monitoring"
               features={[
-                "Up to 2 devices",
-                "Real-time dashboard",
-                "7-day data history",
-                "1 embed widget",
-                "Community support",
+                { text: "1 sensor", highlight: false },
+                { text: "1 widget / kiosk", highlight: false },
+                { text: "60-minute updates", highlight: false },
+                { text: "7-day data history", highlight: false },
+                { text: "CSV export", highlight: false },
+                { text: "1 user seat", highlight: false },
+                { text: "Email support", highlight: false },
               ]}
-              buttonText="Get Started"
+              buttonText="Start Free Trial"
               buttonVariant="outline"
             />
             <PricingCard
               name="Pro"
-              price="$9"
+              price="$79"
               period="/month"
-              description="For homes and small offices"
+              description="For homes and small offices with multiple sensors"
               features={[
-                "Up to 10 devices",
-                "Real-time dashboard",
-                "90-day data history",
-                "Unlimited widgets",
-                "Kiosk mode",
-                "Email alerts",
-                "Priority support",
+                { text: "3 sensors", highlight: true },
+                { text: "3 widgets / kiosks", highlight: false },
+                { text: "30-minute updates", highlight: true },
+                { text: "30-day data history", highlight: true },
+                { text: "CSV export", highlight: false },
+                { text: "3 user seats", highlight: true },
+                { text: "Custom branding on widgets", highlight: true },
+                { text: "Priority email support", highlight: false },
               ]}
               buttonText="Start Free Trial"
               buttonVariant="default"
@@ -293,21 +298,40 @@ export default function Home() {
             />
             <PricingCard
               name="Business"
-              price="$29"
+              price="$199"
               period="/month"
-              description="For larger deployments"
+              description="For organizations managing air quality at scale"
               features={[
-                "Unlimited devices",
-                "Real-time dashboard",
-                "1-year data history",
-                "Unlimited widgets",
-                "Kiosk mode",
-                "Custom branding",
-                "API access",
-                "Dedicated support",
+                { text: "20 sensors", highlight: true },
+                { text: "Unlimited widgets / kiosks", highlight: true },
+                { text: "5-minute updates", highlight: true },
+                { text: "1-year data history", highlight: true },
+                { text: "CSV export", highlight: false },
+                { text: "5 user seats", highlight: true },
+                { text: "White-label branding", highlight: true },
+                { text: "Phone & email support", highlight: false },
               ]}
-              buttonText="Contact Sales"
+              buttonText="Start Free Trial"
               buttonVariant="outline"
+            />
+            <PricingCard
+              name="Custom"
+              description="For enterprises with advanced requirements and dedicated support"
+              features={[
+                { text: "Up to 100 sensors", highlight: true },
+                { text: "Unlimited widgets / kiosks", highlight: true },
+                { text: "1-minute updates", highlight: true },
+                { text: "Unlimited data history", highlight: true },
+                { text: "CSV export", highlight: false },
+                { text: "10+ user seats", highlight: true },
+                { text: "White-label branding", highlight: true },
+                { text: "Dedicated account manager", highlight: true },
+                { text: "SLA guarantee", highlight: true },
+                { text: "Custom integrations", highlight: true },
+              ]}
+              buttonText="Contact Us"
+              buttonVariant="outline"
+              isCustom
             />
           </div>
         </div>
@@ -474,42 +498,66 @@ function PricingCard({
   buttonText,
   buttonVariant,
   popular,
+  isCustom,
 }: {
   name: string;
-  price: string;
+  price?: string;
   period?: string;
   description: string;
-  features: string[];
+  features: { text: string; highlight: boolean }[];
   buttonText: string;
   buttonVariant: "default" | "outline";
   popular?: boolean;
+  isCustom?: boolean;
 }) {
   return (
-    <Card className={`relative transition-all ${popular ? "border-primary shadow-xl scale-105" : "hover:shadow-lg"}`}>
+    <Card
+      className={`relative flex flex-col transition-all ${
+        popular
+          ? "border-primary shadow-xl lg:scale-105 z-10"
+          : "hover:shadow-lg"
+      }`}
+    >
       {popular && (
-        <Badge className="absolute -top-3 left-1/2 -translate-x-1/2">
+        <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 shadow-sm">
           Most Popular
         </Badge>
       )}
       <CardHeader className="text-center pb-2">
         <CardTitle className="text-xl">{name}</CardTitle>
-        <CardDescription>{description}</CardDescription>
+        <CardDescription className="min-h-[40px]">{description}</CardDescription>
         <div className="mt-4">
-          <span className="text-4xl font-bold">{price}</span>
-          {period && <span className="text-muted-foreground">{period}</span>}
+          {isCustom ? (
+            <span className="text-4xl font-bold">Custom</span>
+          ) : (
+            <>
+              <span className="text-4xl font-bold">{price}</span>
+              {period && <span className="text-muted-foreground">{period}</span>}
+            </>
+          )}
         </div>
       </CardHeader>
-      <CardContent className="pt-4">
-        <ul className="space-y-3 mb-6">
+      <CardContent className="pt-4 flex-1 flex flex-col">
+        <Separator className="mb-5" />
+        <ul className="space-y-3 mb-6 flex-1">
           {features.map((feature, i) => (
-            <li key={i} className="flex items-center gap-2 text-sm">
-              <Check className="h-4 w-4 text-primary flex-shrink-0" />
-              <span>{feature}</span>
+            <li key={i} className="flex items-center gap-2.5 text-sm">
+              <Check
+                className={`h-4 w-4 flex-shrink-0 ${
+                  feature.highlight ? "text-primary" : "text-muted-foreground"
+                }`}
+              />
+              <span className={feature.highlight ? "font-medium" : ""}>
+                {feature.text}
+              </span>
             </li>
           ))}
         </ul>
-        <Link href="/signup" className="block">
-          <Button variant={buttonVariant} className="w-full">
+        <Link href={isCustom ? "mailto:hello@breathe.app" : "/signup"} className="block">
+          <Button
+            variant={buttonVariant}
+            className={`w-full ${popular ? "shadow-lg shadow-primary/25" : ""}`}
+          >
             {buttonText}
           </Button>
         </Link>

@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useAuth, useUser } from "@clerk/nextjs";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import Link from "next/link";
 
 import { api } from "@/convex/_generated/api";
@@ -17,48 +15,15 @@ import {
   getHumidityLevel,
   getBatteryLevel,
 } from "@/lib/aqi-levels";
+import { useDashboardContext } from "../_components/dashboard-context";
 
 export default function DevicesPage() {
-  const { isLoaded, userId } = useAuth();
-  const { user } = useUser();
-  const getOrCreateUser = useMutation(api.users.getOrCreateUser);
-  const [convexUserId, setConvexUserId] = useState<Id<"users"> | null>(null);
-
-  useEffect(() => {
-    if (!isLoaded) return;
-    if (!userId || convexUserId || !user) return;
-
-    const email = user.primaryEmailAddress?.emailAddress;
-    if (!email) return;
-
-    let cancelled = false;
-    getOrCreateUser({
-      authId: userId,
-      email,
-      name: user.fullName ?? undefined,
-    })
-      .then((id) => {
-        if (!cancelled) setConvexUserId(id);
-      })
-      .catch(console.error);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isLoaded, userId, user, convexUserId, getOrCreateUser]);
+  const { organizationId } = useDashboardContext();
 
   const devices = useQuery(
     api.devices.list,
-    convexUserId ? { userId: convexUserId } : "skip"
+    { organizationId }
   );
-
-  if (!convexUserId) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <div className="text-muted-foreground">Loading...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6 p-8">
@@ -100,6 +65,7 @@ type Device = {
   lastReadingAt?: number;
   lastBattery?: number;
   providerOffline?: boolean;
+  createdAt: number;
 };
 
 function DeviceRow({ device }: { device: Device }) {

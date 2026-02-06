@@ -27,6 +27,7 @@ export const fetchAccessToken = internalAction({
 export const connectAndSync = internalAction({
   args: {
     userId: v.id("users"),
+    organizationId: v.id("organizations"),
     provider: providerValidator,
     appKey: v.string(),
     appSecret: v.string(),
@@ -43,6 +44,7 @@ export const connectAndSync = internalAction({
 
     // Get existing config
     const existing = await ctx.runQuery(internal.providers.getConfig, {
+      organizationId: args.organizationId,
       userId: args.userId,
       provider: args.provider,
     });
@@ -60,6 +62,7 @@ export const connectAndSync = internalAction({
     } else {
       await ctx.runMutation(internal.providers.insertConfig, {
         userId: args.userId,
+        organizationId: args.organizationId,
         provider: args.provider,
         accessToken: tokenResult.accessToken,
         tokenExpiresAt: tokenResult.tokenExpiresAt,
@@ -70,8 +73,9 @@ export const connectAndSync = internalAction({
     }
 
     // Sync devices
-    await ctx.runAction(internal.providersActions.syncDevicesForUser, {
+    await ctx.runAction(internal.providersActions.syncDevicesForOrg, {
       userId: args.userId,
+      organizationId: args.organizationId,
       provider: args.provider,
     });
 
@@ -79,9 +83,10 @@ export const connectAndSync = internalAction({
   },
 });
 
-export const syncDevicesForUser = internalAction({
+export const syncDevicesForOrg = internalAction({
   args: {
     userId: v.id("users"),
+    organizationId: v.id("organizations"),
     provider: providerValidator,
   },
   returns: v.null(),
@@ -91,6 +96,7 @@ export const syncDevicesForUser = internalAction({
     }
 
     const config = await ctx.runQuery(internal.providers.getConfig, {
+      organizationId: args.organizationId,
       userId: args.userId,
       provider: args.provider,
     });
@@ -112,7 +118,7 @@ export const syncDevicesForUser = internalAction({
         throw new Error("Provider config missing ID, cannot update token");
       }
       
-      console.log("[syncDevicesForUser] Token expired, refreshing...");
+      console.log("[syncDevicesForOrg] Token expired, refreshing...");
       const tokenResult = await qingping.getAccessToken(config.appKey, config.appSecret);
       accessToken = tokenResult.accessToken;
       
@@ -130,7 +136,7 @@ export const syncDevicesForUser = internalAction({
     } catch (error: any) {
       // If we get a 401, try refreshing the token once more
       if (error?.message?.includes("401") && config.appKey && config.appSecret && config._id) {
-        console.log("[syncDevicesForUser] Got 401, refreshing token and retrying...");
+        console.log("[syncDevicesForOrg] Got 401, refreshing token and retrying...");
         const tokenResult = await qingping.getAccessToken(config.appKey, config.appSecret);
         accessToken = tokenResult.accessToken;
         
@@ -147,7 +153,7 @@ export const syncDevicesForUser = internalAction({
       }
     }
     console.log(
-      "[syncDevicesForUser] fetched devices",
+      "[syncDevicesForOrg] fetched devices",
       devices.length,
       "at",
       new Date().toISOString()
@@ -156,9 +162,9 @@ export const syncDevicesForUser = internalAction({
     for (const device of devices) {
       const normalized = qingping.mapQingpingDevice(device);
       const isDeleted: boolean = await ctx.runQuery(
-        internal.devices.isDeletedForUser,
+        internal.devices.isDeletedForOrg,
         {
-          userId: args.userId,
+          organizationId: args.organizationId,
           provider: args.provider,
           providerDeviceId: normalized.providerDeviceId,
         },
@@ -170,6 +176,7 @@ export const syncDevicesForUser = internalAction({
       try {
         await ctx.runMutation(internal.devices.upsertFromProvider, {
           userId: args.userId,
+          organizationId: args.organizationId,
           provider: args.provider,
           providerDeviceId: normalized.providerDeviceId,
           name: normalized.name,
@@ -179,7 +186,7 @@ export const syncDevicesForUser = internalAction({
         });
       } catch (error: any) {
         if (error?.message?.includes("[plan limit]")) {
-          console.log("[syncDevicesForUser]", error.message);
+          console.log("[syncDevicesForOrg]", error.message);
           continue;
         }
         throw error;
@@ -188,7 +195,7 @@ export const syncDevicesForUser = internalAction({
       const reading = qingping.mapQingpingReading(device.data);
       if (reading) {
         console.log(
-          "[syncDevicesForUser] device",
+          "[syncDevicesForOrg] device",
           normalized.providerDeviceId,
           "reading.ts",
           reading.ts,
@@ -220,7 +227,7 @@ export const syncDevicesForUser = internalAction({
             battery: reading.battery,
           });
           console.log(
-            "[syncDevicesForUser] ingested reading",
+            "[syncDevicesForOrg] ingested reading",
             readingId,
             "for device",
             deviceInfo._id,
@@ -231,13 +238,13 @@ export const syncDevicesForUser = internalAction({
           );
         } else {
           console.warn(
-            "[syncDevicesForUser] device not found in DB:",
+            "[syncDevicesForOrg] device not found in DB:",
             normalized.providerDeviceId
           );
         }
       } else {
         console.log(
-          "[syncDevicesForUser] no reading data for device:",
+          "[syncDevicesForOrg] no reading data for device:",
           normalized.providerDeviceId
         );
       }
@@ -253,9 +260,10 @@ export const syncDevicesForUser = internalAction({
   },
 });
 
-export const syncDevicesForUserPublic = action({
+export const syncDevicesForOrgPublic = action({
   args: {
     userId: v.id("users"),
+    organizationId: v.id("organizations"),
     provider: providerValidator,
   },
   returns: v.null(),
@@ -264,8 +272,9 @@ export const syncDevicesForUserPublic = action({
       throw new Error("Only Qingping is supported for now.");
     }
 
-    await ctx.runAction(internal.providersActions.syncDevicesForUser, {
+    await ctx.runAction(internal.providersActions.syncDevicesForOrg, {
       userId: args.userId,
+      organizationId: args.organizationId,
       provider: args.provider,
     });
 
@@ -317,17 +326,19 @@ export const unbindQingpingDevice = internalAction({
 export const unbindQingpingDeviceForDeviceId = internalAction({
   args: {
     userId: v.id("users"),
+    organizationId: v.optional(v.id("organizations")),
     mac: v.string(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const config = await ctx.runQuery(internal.providers.getConfig, {
+      organizationId: args.organizationId,
       userId: args.userId,
       provider: "qingping",
     });
 
     if (!config?.accessToken) {
-      console.warn(`[QINGPING] No config found for user ${args.userId}, skipping unbind`);
+      console.warn(`[QINGPING] No config found for org/user, skipping unbind`);
       return null;
     }
 
@@ -349,8 +360,6 @@ export const unbindQingpingDeviceForDeviceId = internalAction({
     try {
       await qingping.unbindDevice(accessToken, args.mac);
       console.log(`[QINGPING] Successfully unbound device ${args.mac}`);
-      // Note: We do NOT remove the deletedDevices entry here.
-      // It will be removed when the user explicitly re-adds the device via addByMac.
     } catch (error) {
       console.error(`[QINGPING] Failed to unbind device ${args.mac}:`, error);
     }
@@ -365,7 +374,7 @@ export const unbindQingpingDeviceForDeviceId = internalAction({
  */
 export const updateDeviceReportInterval = action({
   args: {
-    userId: v.id("users"),
+    organizationId: v.id("organizations"),
     deviceId: v.id("devices"),
     reportIntervalSeconds: v.number(),
   },
@@ -401,10 +410,11 @@ export const updateDeviceReportInterval = action({
       };
     }
 
-    if (device.userId !== args.userId) {
+    // Verify device belongs to this organization
+    if (device.organizationId !== args.organizationId) {
       return {
         success: false,
-        message: "Device does not belong to this user",
+        message: "Device does not belong to this organization",
       };
     }
 
@@ -415,17 +425,17 @@ export const updateDeviceReportInterval = action({
       };
     }
 
-    // Enforce plan-based minimum interval
-    const user = await ctx.runQuery(internal.users.getInternal, {
-      userId: args.userId,
+    // Enforce plan-based minimum interval using org plan
+    const org = await ctx.runQuery(internal.organizations.getInternal, {
+      organizationId: args.organizationId,
     });
-    if (!user) {
+    if (!org) {
       return {
         success: false,
-        message: "User not found",
+        message: "Organization not found",
       };
     }
-    const plan = user.plan as Plan;
+    const plan = org.plan as Plan;
     const minInterval = getMinRefreshInterval(plan);
     if (args.reportIntervalSeconds < minInterval) {
       const minMinutes = Math.round(minInterval / 60);
@@ -435,9 +445,10 @@ export const updateDeviceReportInterval = action({
       };
     }
 
-    // Get provider config for access token
+    // Get provider config for access token (prefer org-based lookup)
     const config = await ctx.runQuery(internal.providers.getConfig, {
-      userId: args.userId,
+      organizationId: args.organizationId,
+      userId: device.userId,
       provider: "qingping",
     });
 
@@ -470,7 +481,6 @@ export const updateDeviceReportInterval = action({
     }
 
     // Call Qingping API to update device settings
-    // collect_interval should be <= report_interval
     const collectInterval = Math.min(60, args.reportIntervalSeconds);
     
     try {
@@ -489,8 +499,6 @@ export const updateDeviceReportInterval = action({
         });
       }
 
-      // Update device record with the new interval
-      // Set intervalChangeAt when interval changes to prevent retroactive ingestion
       const intervalChangeAt = device.reportInterval !== args.reportIntervalSeconds 
         ? Date.now() 
         : undefined;
@@ -546,18 +554,16 @@ export const pollAllReadings = internalAction({
       let accessToken = config.accessToken;
       
       if (!config.tokenExpiresAt || config.tokenExpiresAt <= now + 5 * 60 * 1000) {
-        // Token expired or expiring soon, refresh it
         if (!config.appKey || !config.appSecret) {
-          console.warn("[POLLING] Token expired and no credentials available to refresh for user:", config.userId);
+          console.warn("[POLLING] Token expired and no credentials available to refresh for config:", config._id);
           errors++;
           continue;
         }
         
-        console.log("[POLLING] Token expired, refreshing for user:", config.userId);
-      const tokenResult = await qingping.getAccessToken(config.appKey, config.appSecret);
+        console.log("[POLLING] Token expired, refreshing for config:", config._id);
+        const tokenResult = await qingping.getAccessToken(config.appKey, config.appSecret);
         accessToken = tokenResult.accessToken;
         
-        // Update the token in the database
         await ctx.runMutation(internal.providers.updateToken, {
           providerConfigId: config._id,
           accessToken: tokenResult.accessToken,
@@ -568,11 +574,10 @@ export const pollAllReadings = internalAction({
       let devices;
       try {
         devices = await qingping.listDevices(accessToken);
-        console.log(`[POLLING] Fetched ${devices.length} devices for user: ${config.userId}`);
+        console.log(`[POLLING] Fetched ${devices.length} devices for config: ${config._id}`);
       } catch (error: any) {
-        // If we get a 401, try refreshing the token once more
         if (error?.message?.includes("401") && config.appKey && config.appSecret) {
-          console.log("[POLLING] Got 401, refreshing token and retrying for user:", config.userId);
+          console.log("[POLLING] Got 401, refreshing token and retrying for config:", config._id);
           const tokenResult = await qingping.getAccessToken(config.appKey, config.appSecret);
           accessToken = tokenResult.accessToken;
           
@@ -582,17 +587,16 @@ export const pollAllReadings = internalAction({
             tokenExpiresAt: tokenResult.tokenExpiresAt,
           });
           
-          // Retry once
           try {
             devices = await qingping.listDevices(accessToken);
-            console.log(`[POLLING] Retry successful, fetched ${devices.length} devices for user: ${config.userId}`);
+            console.log(`[POLLING] Retry successful, fetched ${devices.length} devices for config: ${config._id}`);
           } catch (retryError) {
-            console.error("[POLLING] Failed after token refresh for user:", config.userId, retryError);
+            console.error("[POLLING] Failed after token refresh for config:", config._id, retryError);
             errors++;
             continue;
           }
         } else {
-          console.error("[POLLING] API error for user:", config.userId, error);
+          console.error("[POLLING] API error for config:", config._id, error);
           errors++;
           continue;
         }
@@ -607,6 +611,7 @@ export const pollAllReadings = internalAction({
         try {
           await ctx.runMutation(internal.devices.upsertFromProvider, {
             userId: config.userId,
+            organizationId: config.organizationId,
             provider: config.provider,
             providerDeviceId: device.info.mac,
             name: device.info.name,
@@ -639,7 +644,6 @@ export const pollAllReadings = internalAction({
         });
         const reportIntervalSeconds = deviceRecord?.reportInterval ?? 3600;
         const reportIntervalMs = reportIntervalSeconds * 1000;
-        // Use intervalChangeAt and createdAt as minimum cutoffs to prevent retroactive/stale ingestion
         const minAcceptedTs = Math.max(
           deviceRecord?.intervalChangeAt ?? 0,
           deviceRecord?.lastReadingAt ?? 0,
@@ -647,7 +651,6 @@ export const pollAllReadings = internalAction({
         );
         const readingTs = normalizeTimestampMs(reading.ts);
 
-        // Skip readings older than the interval change timestamp
         if (readingTs < minAcceptedTs) {
           continue;
         }

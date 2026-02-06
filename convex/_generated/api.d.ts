@@ -27,6 +27,7 @@ export declare const api: {
       {
         macAddress: string;
         name: string;
+        organizationId: Id<"organizations">;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         userId: Id<"users">;
       },
@@ -63,6 +64,7 @@ export declare const api: {
         lastReadingAt?: number;
         model?: string;
         name: string;
+        organizationId?: Id<"organizations">;
         primaryMetrics?: Array<string>;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         providerDeviceId: string;
@@ -77,13 +79,13 @@ export declare const api: {
     hasQingpingDevice: FunctionReference<
       "query",
       "public",
-      { userId: Id<"users"> },
+      { organizationId: Id<"organizations"> },
       boolean
     >;
     list: FunctionReference<
       "query",
       "public",
-      { userId: Id<"users"> },
+      { organizationId: Id<"organizations"> },
       Array<{
         _creationTime: number;
         _id: Id<"devices">;
@@ -96,6 +98,7 @@ export declare const api: {
         lastReadingAt?: number;
         model?: string;
         name: string;
+        organizationId?: Id<"organizations">;
         primaryMetrics?: Array<string>;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         providerDeviceId: string;
@@ -148,6 +151,7 @@ export declare const api: {
         hideAirViewBranding?: boolean;
         label?: string;
         logoStorageId?: Id<"_storage">;
+        organizationId: Id<"organizations">;
         refreshInterval?: number;
         size?: "small" | "medium" | "large";
         userId: Id<"users">;
@@ -164,6 +168,7 @@ export declare const api: {
         isRevoked: boolean;
         label?: string;
         logoStorageId?: Id<"_storage">;
+        organizationId?: Id<"organizations">;
         refreshInterval?: number;
         size?: "small" | "medium" | "large";
         token: string;
@@ -186,6 +191,7 @@ export declare const api: {
         isRevoked: boolean;
         label?: string;
         logoStorageId?: Id<"_storage">;
+        organizationId?: Id<"organizations">;
         refreshInterval?: number;
         size?: "small" | "medium" | "large";
         token: string;
@@ -195,7 +201,7 @@ export declare const api: {
     listForUser: FunctionReference<
       "query",
       "public",
-      { userId: Id<"users"> },
+      { organizationId: Id<"organizations"> },
       Array<{
         _creationTime: number;
         _id: Id<"embedTokens">;
@@ -208,6 +214,7 @@ export declare const api: {
         isRevoked: boolean;
         label?: string;
         logoStorageId?: Id<"_storage">;
+        organizationId?: Id<"organizations">;
         refreshInterval?: number;
         size?: "small" | "medium" | "large";
         token: string;
@@ -242,6 +249,7 @@ export declare const api: {
         isRevoked: boolean;
         label?: string;
         logoStorageId?: Id<"_storage">;
+        organizationId?: Id<"organizations">;
         refreshInterval?: number;
         size?: "small" | "medium" | "large";
         token: string;
@@ -264,6 +272,7 @@ export declare const api: {
         isRevoked: boolean;
         label?: string;
         logoStorageId?: Id<"_storage">;
+        organizationId?: Id<"organizations">;
         refreshInterval?: number;
         size?: "small" | "medium" | "large";
         token: string;
@@ -298,6 +307,7 @@ export declare const api: {
         label?: string;
         logoStorageId?: Id<"_storage">;
         mode: "single" | "multi";
+        organizationId: Id<"organizations">;
         refreshInterval: number;
         theme: "dark" | "light";
         title?: string;
@@ -316,6 +326,7 @@ export declare const api: {
         label?: string;
         logoStorageId?: Id<"_storage">;
         mode: "single" | "multi";
+        organizationId?: Id<"organizations">;
         refreshInterval: number;
         theme: "dark" | "light";
         title?: string;
@@ -327,7 +338,7 @@ export declare const api: {
     listForUser: FunctionReference<
       "query",
       "public",
-      { userId: Id<"users"> },
+      { organizationId: Id<"organizations"> },
       Array<{
         _creationTime: number;
         _id: Id<"kioskConfigs">;
@@ -340,6 +351,7 @@ export declare const api: {
         label?: string;
         logoStorageId?: Id<"_storage">;
         mode: "single" | "multi";
+        organizationId?: Id<"organizations">;
         refreshInterval: number;
         theme: "dark" | "light";
         title?: string;
@@ -374,6 +386,90 @@ export declare const api: {
       null
     >;
   };
+  organizations: {
+    addMember: FunctionReference<
+      "mutation",
+      "public",
+      {
+        organizationId: Id<"organizations">;
+        role: "owner" | "admin" | "member";
+        userId: Id<"users">;
+      },
+      Id<"orgMembers">
+    >;
+    debugSetOrgPlan: FunctionReference<
+      "mutation",
+      "public",
+      {
+        organizationId: Id<"organizations">;
+        plan: "starter" | "pro" | "business" | "custom";
+      },
+      null
+    >;
+    getByClerkOrgId: FunctionReference<
+      "query",
+      "public",
+      { clerkOrgId: string },
+      null | {
+        _creationTime: number;
+        _id: Id<"organizations">;
+        clerkOrgId?: string;
+        createdAt: number;
+        isPersonal: boolean;
+        name: string;
+        plan: "starter" | "pro" | "business" | "custom";
+      }
+    >;
+    getForUser: FunctionReference<
+      "query",
+      "public",
+      { userId: Id<"users"> },
+      Array<{
+        _creationTime: number;
+        _id: Id<"organizations">;
+        clerkOrgId?: string;
+        createdAt: number;
+        isPersonal: boolean;
+        name: string;
+        plan: "starter" | "pro" | "business" | "custom";
+        role: "owner" | "admin" | "member";
+      }>
+    >;
+    getOrCreateFromClerk: FunctionReference<
+      "mutation",
+      "public",
+      { clerkOrgId: string; name: string; ownerUserId: Id<"users"> },
+      Id<"organizations">
+    >;
+    listMembers: FunctionReference<
+      "query",
+      "public",
+      { organizationId: Id<"organizations"> },
+      Array<{
+        _id: Id<"orgMembers">;
+        email: string;
+        joinedAt: number;
+        name?: string;
+        role: "owner" | "admin" | "member";
+        userId: Id<"users">;
+      }>
+    >;
+    removeMember: FunctionReference<
+      "mutation",
+      "public",
+      { organizationId: Id<"organizations">; userId: Id<"users"> },
+      null
+    >;
+    updatePlan: FunctionReference<
+      "mutation",
+      "public",
+      {
+        organizationId: Id<"organizations">;
+        plan: "starter" | "pro" | "business" | "custom";
+      },
+      null
+    >;
+  };
   providers: {
     connect: FunctionReference<
       "mutation",
@@ -381,6 +477,7 @@ export declare const api: {
       {
         appKey: string;
         appSecret: string;
+        organizationId: Id<"organizations">;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         userId: Id<"users">;
         webhookSecret?: string;
@@ -391,17 +488,18 @@ export declare const api: {
       "query",
       "public",
       {
+        organizationId: Id<"organizations">;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
-        userId: Id<"users">;
       },
       boolean
     >;
   };
   providersActions: {
-    syncDevicesForUserPublic: FunctionReference<
+    syncDevicesForOrgPublic: FunctionReference<
       "action",
       "public",
       {
+        organizationId: Id<"organizations">;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         userId: Id<"users">;
       },
@@ -412,8 +510,8 @@ export declare const api: {
       "public",
       {
         deviceId: Id<"devices">;
+        organizationId: Id<"organizations">;
         reportIntervalSeconds: number;
-        userId: Id<"users">;
       },
       { message: string; success: boolean }
     >;
@@ -537,8 +635,8 @@ export declare const api: {
       {
         deviceId: Id<"devices">;
         endTs: number;
+        organizationId: Id<"organizations">;
         startTs: number;
-        userId: Id<"users">;
       },
       {
         clampedStart: number;
@@ -637,7 +735,11 @@ export declare const api: {
     create: FunctionReference<
       "mutation",
       "public",
-      { name: string; userId: Id<"users"> },
+      {
+        name: string;
+        organizationId: Id<"organizations">;
+        userId: Id<"users">;
+      },
       Id<"rooms">
     >;
     get: FunctionReference<
@@ -649,31 +751,37 @@ export declare const api: {
         _id: Id<"rooms">;
         createdAt: number;
         name: string;
+        organizationId?: Id<"organizations">;
         userId: Id<"users">;
       } | null
     >;
     list: FunctionReference<
       "query",
       "public",
-      { userId: Id<"users"> },
+      { organizationId: Id<"organizations"> },
       Array<{
         _creationTime: number;
         _id: Id<"rooms">;
         createdAt: number;
         name: string;
+        organizationId?: Id<"organizations">;
         userId: Id<"users">;
       }>
     >;
     remove: FunctionReference<
       "mutation",
       "public",
-      { roomId: Id<"rooms">; userId: Id<"users"> },
+      { organizationId: Id<"organizations">; roomId: Id<"rooms"> },
       null
     >;
     update: FunctionReference<
       "mutation",
       "public",
-      { name: string; roomId: Id<"rooms">; userId: Id<"users"> },
+      {
+        name: string;
+        organizationId: Id<"organizations">;
+        roomId: Id<"rooms">;
+      },
       null
     >;
   };
@@ -681,7 +789,7 @@ export declare const api: {
     generateUploadUrl: FunctionReference<
       "mutation",
       "public",
-      { userId: Id<"users"> },
+      { organizationId: Id<"organizations"> },
       string
     >;
     getLogoUrl: FunctionReference<
@@ -723,7 +831,7 @@ export declare const api: {
         createdAt: number;
         email: string;
         name?: string;
-        plan: "starter" | "pro" | "business" | "custom";
+        plan?: "starter" | "pro" | "business" | "custom";
       }
     >;
     getOrCreateUser: FunctionReference<
@@ -761,7 +869,11 @@ export declare const internal: {
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         providerDeviceId: string;
       },
-      null | { _id: Id<"devices">; userId: Id<"users"> }
+      null | {
+        _id: Id<"devices">;
+        organizationId?: Id<"organizations">;
+        userId: Id<"users">;
+      }
     >;
     getInternal: FunctionReference<
       "query",
@@ -779,6 +891,7 @@ export declare const internal: {
         lastReadingAt?: number;
         model?: string;
         name: string;
+        organizationId?: Id<"organizations">;
         primaryMetrics?: Array<string>;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         providerDeviceId: string;
@@ -794,6 +907,16 @@ export declare const internal: {
       "query",
       "internal",
       {
+        provider: "qingping" | "purpleair" | "iqair" | "temtop";
+        providerDeviceId: string;
+      },
+      boolean
+    >;
+    isDeletedForOrg: FunctionReference<
+      "query",
+      "internal",
+      {
+        organizationId: Id<"organizations">;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         providerDeviceId: string;
       },
@@ -834,6 +957,7 @@ export declare const internal: {
       {
         model?: string;
         name: string;
+        organizationId?: Id<"organizations">;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         providerDeviceId: string;
         providerOffline?: boolean;
@@ -860,6 +984,7 @@ export declare const internal: {
         isRevoked: boolean;
         label?: string;
         logoStorageId?: Id<"_storage">;
+        organizationId?: Id<"organizations">;
         refreshInterval?: number;
         size?: "small" | "medium" | "large";
         token: string;
@@ -896,6 +1021,7 @@ export declare const internal: {
         label?: string;
         logoStorageId?: Id<"_storage">;
         mode: "single" | "multi";
+        organizationId?: Id<"organizations">;
         refreshInterval: number;
         theme: "dark" | "light";
         title?: string;
@@ -905,13 +1031,63 @@ export declare const internal: {
       }
     >;
   };
+  migrations: {
+    migrateToOrganizations: FunctionReference<
+      "mutation",
+      "internal",
+      {},
+      {
+        deletedDevicesUpdated: number;
+        devicesUpdated: number;
+        embedTokensUpdated: number;
+        kioskConfigsUpdated: number;
+        orgsCreated: number;
+        providerConfigsUpdated: number;
+        roomsUpdated: number;
+        usersProcessed: number;
+      }
+    >;
+  };
+  organizations: {
+    createPersonalOrg: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        name: string;
+        plan: "starter" | "pro" | "business" | "custom";
+        userId: Id<"users">;
+      },
+      Id<"organizations">
+    >;
+    getInternal: FunctionReference<
+      "query",
+      "internal",
+      { organizationId: Id<"organizations"> },
+      null | {
+        _id: Id<"organizations">;
+        isPersonal: boolean;
+        name: string;
+        plan: "starter" | "pro" | "business" | "custom";
+      }
+    >;
+    getPersonalOrgForUser: FunctionReference<
+      "query",
+      "internal",
+      { userId: Id<"users"> },
+      null | {
+        _id: Id<"organizations">;
+        plan: "starter" | "pro" | "business" | "custom";
+      }
+    >;
+  };
   providers: {
     getConfig: FunctionReference<
       "query",
       "internal",
       {
+        organizationId?: Id<"organizations">;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
-        userId: Id<"users">;
+        userId?: Id<"users">;
       },
       null | {
         _creationTime: number;
@@ -920,6 +1096,7 @@ export declare const internal: {
         appKey?: string;
         appSecret?: string;
         lastSyncAt?: number;
+        organizationId?: Id<"organizations">;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         tokenExpiresAt: number;
         userId: Id<"users">;
@@ -933,6 +1110,7 @@ export declare const internal: {
         accessToken: string;
         appKey: string;
         appSecret: string;
+        organizationId?: Id<"organizations">;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         tokenExpiresAt: number;
         userId: Id<"users">;
@@ -951,6 +1129,7 @@ export declare const internal: {
         appKey?: string;
         appSecret?: string;
         lastSyncAt?: number;
+        organizationId?: Id<"organizations">;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         tokenExpiresAt: number;
         userId: Id<"users">;
@@ -994,6 +1173,7 @@ export declare const internal: {
       {
         appKey: string;
         appSecret: string;
+        organizationId: Id<"organizations">;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         userId: Id<"users">;
         webhookSecret?: string;
@@ -1008,10 +1188,11 @@ export declare const internal: {
     >;
     pollAllReadings: FunctionReference<"action", "internal", {}, null>;
     refreshExpiringTokens: FunctionReference<"action", "internal", {}, null>;
-    syncDevicesForUser: FunctionReference<
+    syncDevicesForOrg: FunctionReference<
       "action",
       "internal",
       {
+        organizationId: Id<"organizations">;
         provider: "qingping" | "purpleair" | "iqair" | "temtop";
         userId: Id<"users">;
       },
@@ -1026,7 +1207,11 @@ export declare const internal: {
     unbindQingpingDeviceForDeviceId: FunctionReference<
       "action",
       "internal",
-      { mac: string; userId: Id<"users"> },
+      {
+        mac: string;
+        organizationId?: Id<"organizations">;
+        userId: Id<"users">;
+      },
       null
     >;
   };
@@ -1057,7 +1242,7 @@ export declare const internal: {
       { userId: Id<"users"> },
       null | {
         _id: Id<"users">;
-        plan: "starter" | "pro" | "business" | "custom";
+        plan?: "starter" | "pro" | "business" | "custom";
       }
     >;
     mergeDuplicateUsers: FunctionReference<

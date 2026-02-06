@@ -4,11 +4,13 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { providerValidator } from "./lib/validators";
 import { getMaxDevices, type Plan } from "./lib/planLimits";
+import { getOrgPlan } from "./lib/orgAuth";
 
 const deviceShape = v.object({
   _id: v.id("devices"),
   _creationTime: v.number(),
   userId: v.id("users"),
+  organizationId: v.optional(v.id("organizations")),
   roomId: v.optional(v.id("rooms")),
   provider: providerValidator,
   providerDeviceId: v.string(),
@@ -30,13 +32,13 @@ const deviceShape = v.object({
 
 export const list = query({
   args: {
-    userId: v.id("users"),
+    organizationId: v.id("organizations"),
   },
   returns: v.array(deviceShape),
   handler: async (ctx, args) => {
     return await ctx.db
       .query("devices")
-      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .withIndex("by_organizationId", (q) => q.eq("organizationId", args.organizationId))
       .order("desc")
       .collect();
   },
@@ -44,13 +46,13 @@ export const list = query({
 
 export const hasQingpingDevice = query({
   args: {
-    userId: v.id("users"),
+    organizationId: v.id("organizations"),
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
     const devices = await ctx.db
       .query("devices")
-      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .withIndex("by_organizationId", (q) => q.eq("organizationId", args.organizationId))
       .collect();
     return devices.some((device) => device.provider === "qingping");
   },
@@ -156,6 +158,7 @@ export const deleteDevice = mutation({
     if (!existingDeleted) {
       await ctx.db.insert("deletedDevices", {
         userId: device.userId,
+        organizationId: device.organizationId,
         provider: device.provider,
         providerDeviceId: device.providerDeviceId,
         deletedAt: Date.now(),
@@ -180,10 +183,16 @@ export const deleteDevice = mutation({
       await ctx.db.delete(token._id);
     }
 
-    const kioskConfigs = await ctx.db
-      .query("kioskConfigs")
-      .withIndex("by_userId", (q) => q.eq("userId", device.userId))
-      .collect();
+    // Use organizationId if available, fall back to userId for pre-migration data
+    const kioskQuery = device.organizationId
+      ? ctx.db
+          .query("kioskConfigs")
+          .withIndex("by_organizationId", (q) => q.eq("organizationId", device.organizationId!))
+      : ctx.db
+          .query("kioskConfigs")
+          .withIndex("by_userId", (q) => q.eq("userId", device.userId));
+
+    const kioskConfigs = await kioskQuery.collect();
 
     for (const config of kioskConfigs) {
       if (!config.deviceIds.includes(args.deviceId)) {
@@ -208,6 +217,7 @@ export const getByProviderDeviceId = internalQuery({
     v.object({
       _id: v.id("devices"),
       userId: v.id("users"),
+      organizationId: v.optional(v.id("organizations")),
     }),
   ),
   handler: async (ctx, args) => {
@@ -222,13 +232,14 @@ export const getByProviderDeviceId = internalQuery({
       return null;
     }
 
-    return { _id: device._id, userId: device.userId };
+    return { _id: device._id, userId: device.userId, organizationId: device.organizationId };
   },
 });
 
 export const upsertFromProvider = internalMutation({
   args: {
     userId: v.id("users"),
+    organizationId: v.optional(v.id("organizations")),
     provider: providerValidator,
     providerDeviceId: v.string(),
     name: v.string(),
@@ -266,24 +277,38 @@ export const upsertFromProvider = internalMutation({
     }
 
     // Enforce device limit before creating a new device from provider sync
-    const user = await ctx.db.get(args.userId);
-    if (!user) {
-      throw new Error("User not found");
+    // Get plan from organization if available, otherwise fall back to user
+    let plan: Plan;
+    if (args.organizationId) {
+      plan = await getOrgPlan(ctx.db, args.organizationId);
+    } else {
+      const user = await ctx.db.get(args.userId);
+      if (!user) throw new Error("User not found");
+      plan = (user.plan ?? "starter") as Plan;
     }
-    const plan = user.plan as Plan;
+
     const maxDevices = getMaxDevices(plan);
-    const currentDevices = await ctx.db
-      .query("devices")
-      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
-      .collect();
+
+    // Count devices by org if available, otherwise by user
+    const currentDevices = args.organizationId
+      ? await ctx.db
+          .query("devices")
+          .withIndex("by_organizationId", (q) => q.eq("organizationId", args.organizationId!))
+          .collect()
+      : await ctx.db
+          .query("devices")
+          .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+          .collect();
+
     if (currentDevices.length >= maxDevices) {
       throw new Error(
-        `[plan limit] User at device limit (${maxDevices}) on ${plan} plan. Skipping device ${args.providerDeviceId}.`
+        `[plan limit] Organization at device limit (${maxDevices}) on ${plan} plan. Skipping device ${args.providerDeviceId}.`
       );
     }
 
     return await ctx.db.insert("devices", {
       userId: args.userId,
+      organizationId: args.organizationId,
       provider: args.provider,
       providerDeviceId: args.providerDeviceId,
       name: args.name,
@@ -303,6 +328,7 @@ export const upsertFromProvider = internalMutation({
 export const addByMac = mutation({
   args: {
     userId: v.id("users"),
+    organizationId: v.id("organizations"),
     name: v.string(),
     macAddress: v.string(),
     provider: providerValidator,
@@ -332,9 +358,18 @@ export const addByMac = mutation({
       .unique();
 
     if (existing) {
-      // If it exists and belongs to this user, just update the name
-      if (existing.userId === args.userId) {
+      // If it exists and belongs to this organization, just update the name
+      if (existing.organizationId === args.organizationId) {
         await ctx.db.patch(existing._id, { name: args.name });
+        return existing._id;
+      }
+
+      // If it belongs to the same user (legacy check), update ownership
+      if (existing.userId === args.userId) {
+        await ctx.db.patch(existing._id, { 
+          name: args.name,
+          organizationId: args.organizationId,
+        });
         return existing._id;
       }
       
@@ -344,11 +379,11 @@ export const addByMac = mutation({
       
       if (previousOwner && currentUser) {
         // Check if it's the same person (same email) who re-signed up
-        // This handles the case where user deleted account and re-signed up
         if (previousOwner.email === currentUser.email) {
-          // Same person - transfer device ownership to new user
+          // Same person - transfer device ownership to new user/org
           await ctx.db.patch(existing._id, { 
             userId: args.userId,
+            organizationId: args.organizationId,
             name: args.name,
           });
           return existing._id;
@@ -377,15 +412,11 @@ export const addByMac = mutation({
     }
 
     // Enforce device limit before creating a new device
-    const user = await ctx.db.get(args.userId);
-    if (!user) {
-      throw new Error("User not found");
-    }
-    const plan = user.plan as Plan;
+    const plan = await getOrgPlan(ctx.db, args.organizationId);
     const maxDevices = getMaxDevices(plan);
     const currentDevices = await ctx.db
       .query("devices")
-      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .withIndex("by_organizationId", (q) => q.eq("organizationId", args.organizationId))
       .collect();
     if (currentDevices.length >= maxDevices) {
       throw new Error(
@@ -396,6 +427,7 @@ export const addByMac = mutation({
     // Create new device
     return await ctx.db.insert("devices", {
       userId: args.userId,
+      organizationId: args.organizationId,
       provider: args.provider,
       providerDeviceId: args.macAddress,
       name: args.name,
@@ -405,6 +437,33 @@ export const addByMac = mutation({
   },
 });
 
+/**
+ * Check if a device was deleted for a specific organization.
+ */
+export const isDeletedForOrg = internalQuery({
+  args: {
+    organizationId: v.id("organizations"),
+    provider: providerValidator,
+    providerDeviceId: v.string(),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("deletedDevices")
+      .withIndex("by_organizationId_and_provider_and_providerDeviceId", (q) =>
+        q
+          .eq("organizationId", args.organizationId)
+          .eq("provider", args.provider)
+          .eq("providerDeviceId", args.providerDeviceId),
+      )
+      .first();
+    return Boolean(existing);
+  },
+});
+
+/**
+ * @deprecated Use isDeletedForOrg instead. Kept for backward compatibility during migration.
+ */
 export const isDeletedForUser = internalQuery({
   args: {
     userId: v.id("users"),

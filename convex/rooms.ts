@@ -5,6 +5,7 @@ const roomShape = v.object({
   _id: v.id("rooms"),
   _creationTime: v.number(),
   userId: v.id("users"),
+  organizationId: v.optional(v.id("organizations")),
   name: v.string(),
   createdAt: v.number(),
 });
@@ -12,12 +13,14 @@ const roomShape = v.object({
 export const create = mutation({
   args: {
     userId: v.id("users"),
+    organizationId: v.id("organizations"),
     name: v.string(),
   },
   returns: v.id("rooms"),
   handler: async (ctx, args) => {
     return await ctx.db.insert("rooms", {
       userId: args.userId,
+      organizationId: args.organizationId,
       name: args.name,
       createdAt: Date.now(),
     });
@@ -26,13 +29,13 @@ export const create = mutation({
 
 export const list = query({
   args: {
-    userId: v.id("users"),
+    organizationId: v.id("organizations"),
   },
   returns: v.array(roomShape),
   handler: async (ctx, args) => {
     return await ctx.db
       .query("rooms")
-      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .withIndex("by_organizationId", (q) => q.eq("organizationId", args.organizationId))
       .order("desc")
       .collect();
   },
@@ -52,13 +55,13 @@ export const get = query({
 export const update = mutation({
   args: {
     roomId: v.id("rooms"),
-    userId: v.id("users"),
+    organizationId: v.id("organizations"),
     name: v.string(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const room = await ctx.db.get(args.roomId);
-    if (!room || room.userId !== args.userId) {
+    if (!room || room.organizationId !== args.organizationId) {
       throw new Error("Room not found.");
     }
 
@@ -70,12 +73,12 @@ export const update = mutation({
 export const remove = mutation({
   args: {
     roomId: v.id("rooms"),
-    userId: v.id("users"),
+    organizationId: v.id("organizations"),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const room = await ctx.db.get(args.roomId);
-    if (!room || room.userId !== args.userId) {
+    if (!room || room.organizationId !== args.organizationId) {
       throw new Error("Room not found.");
     }
 

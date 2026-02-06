@@ -1,65 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useAuth, useUser } from "@clerk/nextjs";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getDeviceStatus } from "@/lib/deviceStatus";
+import { useDashboardContext } from "../_components/dashboard-context";
 
 export default function WidgetsDashboardPage() {
   const router = useRouter();
-  const { isLoaded, userId } = useAuth();
-  const { user } = useUser();
-  const getOrCreateUser = useMutation(api.users.getOrCreateUser);
-
-  const [convexUserId, setConvexUserId] = useState<Id<"users"> | null>(null);
-
-  useEffect(() => {
-    if (!isLoaded) return;
-    if (!userId) {
-      router.replace("/login");
-      return;
-    }
-    if (convexUserId || !user) return;
-
-    const email = user.primaryEmailAddress?.emailAddress;
-    if (!email) return;
-
-    let cancelled = false;
-    getOrCreateUser({
-      authId: userId,
-      email,
-      name: user.fullName ?? undefined,
-    })
-      .then((id) => {
-        if (!cancelled) setConvexUserId(id);
-      })
-      .catch(console.error);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isLoaded, userId, user, convexUserId, getOrCreateUser, router]);
+  const { organizationId } = useDashboardContext();
 
   const devices = useQuery(
     api.devices.list,
-    convexUserId ? { userId: convexUserId } : "skip"
+    { organizationId }
   );
-
-  if (!convexUserId) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <div className="text-muted-foreground">Loading...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6 p-8">

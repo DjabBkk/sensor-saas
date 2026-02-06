@@ -1,12 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useAuth, useUser } from "@clerk/nextjs";
-import { useMutation } from "convex/react";
+import { useState } from "react";
 import { useTheme } from "next-themes";
 
-import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -16,30 +12,10 @@ import { Badge } from "@/components/ui/badge";
 import { Bell, Moon } from "lucide-react";
 
 export default function SettingsPage() {
-  const { isLoaded, userId } = useAuth();
-  const { user } = useUser();
   const { resolvedTheme, setTheme } = useTheme();
-  const getOrCreateUser = useMutation(api.users.getOrCreateUser);
-  const [convexUserId, setConvexUserId] = useState<Id<"users"> | null>(null);
   const [emailAlerts, setEmailAlerts] = useState(true);
   const [pushNotifications, setPushNotifications] = useState(false);
   const isDarkMode = resolvedTheme === "dark";
-
-  // Get or create Convex user
-  useEffect(() => {
-    if (!isLoaded || !userId || convexUserId || !user) return;
-
-    const email = user.primaryEmailAddress?.emailAddress;
-    if (!email) return;
-
-    getOrCreateUser({
-      authId: userId,
-      email,
-      name: user.fullName ?? undefined,
-    })
-      .then(setConvexUserId)
-      .catch(console.error);
-  }, [isLoaded, userId, user, convexUserId, getOrCreateUser]);
 
   return (
     <div className="space-y-6 p-8">

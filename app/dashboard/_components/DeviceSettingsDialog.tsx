@@ -33,6 +33,7 @@ import { getMinRefreshInterval, type Plan } from "@/convex/lib/planLimits";
 type DeviceSettingsDialogProps = {
   deviceId: Id<"devices">;
   userId: Id<"users">;
+  organizationId: Id<"organizations">;
   deviceName: string;
   hiddenMetrics?: string[];
   availableMetrics?: string[];
@@ -79,6 +80,7 @@ const METRIC_OPTIONS = [
 export function DeviceSettingsDialog({
   deviceId,
   userId,
+  organizationId,
   deviceName,
   hiddenMetrics,
   availableMetrics,
@@ -279,7 +281,7 @@ export function DeviceSettingsDialog({
     
     try {
       const result = await updateReportInterval({
-        userId,
+        organizationId,
         deviceId,
         reportIntervalSeconds: Number(value),
       });

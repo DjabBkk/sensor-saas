@@ -1,12 +1,13 @@
 import { query, mutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
-import { internal } from "./_generated/api";
 import { getDefaultRefreshInterval, getMinRefreshInterval, getPlanLimits, isValidRefreshInterval } from "./lib/planLimits";
+import { getOrgPlan } from "./lib/orgAuth";
 
 const embedTokenShape = v.object({
   _id: v.id("embedTokens"),
   _creationTime: v.number(),
   userId: v.id("users"),
+  organizationId: v.optional(v.id("organizations")),
   deviceId: v.id("devices"),
   token: v.string(),
   label: v.optional(v.string()),
@@ -28,13 +29,13 @@ const generateToken = () => {
 
 export const listForUser = query({
   args: {
-    userId: v.id("users"),
+    organizationId: v.id("organizations"),
   },
   returns: v.array(embedTokenShape),
   handler: async (ctx, args) => {
     return await ctx.db
       .query("embedTokens")
-      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .withIndex("by_organizationId", (q) => q.eq("organizationId", args.organizationId))
       .order("desc")
       .collect();
   },
@@ -57,6 +58,7 @@ export const listForDevice = query({
 export const create = mutation({
   args: {
     userId: v.id("users"),
+    organizationId: v.id("organizations"),
     deviceId: v.id("devices"),
     label: v.optional(v.string()),
     description: v.optional(v.string()),
@@ -70,52 +72,49 @@ export const create = mutation({
   },
   returns: embedTokenShape,
   handler: async (ctx, args) => {
-    // Get user plan to validate limits
-    const user = await ctx.db.get(args.userId);
-    if (!user) {
-      throw new Error("User not found.");
-    }
+    // Get plan from organization
+    const plan = await getOrgPlan(ctx.db, args.organizationId);
+    const limits = getPlanLimits(plan);
 
     // Enforce widget/kiosk limit
-    const limits = getPlanLimits(user.plan);
     if (limits.sharedWidgetKioskLimit !== null) {
       // Shared limit: count widgets + kiosks combined
-      const allUserTokens = await ctx.db
+      const allOrgTokens = await ctx.db
         .query("embedTokens")
-        .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+        .withIndex("by_organizationId", (q) => q.eq("organizationId", args.organizationId))
         .collect();
-      const activeWidgets = allUserTokens.filter((t) => !t.isRevoked).length;
-      const allUserKiosks = await ctx.db
+      const activeWidgets = allOrgTokens.filter((t) => !t.isRevoked).length;
+      const allOrgKiosks = await ctx.db
         .query("kioskConfigs")
-        .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+        .withIndex("by_organizationId", (q) => q.eq("organizationId", args.organizationId))
         .collect();
-      const activeKiosks = allUserKiosks.filter((k) => !k.isRevoked).length;
+      const activeKiosks = allOrgKiosks.filter((k) => !k.isRevoked).length;
       if (activeWidgets + activeKiosks >= limits.sharedWidgetKioskLimit) {
         throw new Error(
-          `You've reached the maximum of ${limits.sharedWidgetKioskLimit} widget or kiosk on your ${user.plan} plan. Upgrade to add more.`
+          `You've reached the maximum of ${limits.sharedWidgetKioskLimit} widget or kiosk on your ${plan} plan. Upgrade to add more.`
         );
       }
     } else if (limits.maxWidgets !== Infinity) {
       // Separate per-type limit
-      const allUserTokens = await ctx.db
+      const allOrgTokens = await ctx.db
         .query("embedTokens")
-        .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+        .withIndex("by_organizationId", (q) => q.eq("organizationId", args.organizationId))
         .collect();
-      const activeCount = allUserTokens.filter((t) => !t.isRevoked).length;
+      const activeCount = allOrgTokens.filter((t) => !t.isRevoked).length;
       if (activeCount >= limits.maxWidgets) {
         throw new Error(
-          `You've reached the maximum of ${limits.maxWidgets} widget${limits.maxWidgets === 1 ? "" : "s"} on your ${user.plan} plan. Upgrade to add more.`
+          `You've reached the maximum of ${limits.maxWidgets} widget${limits.maxWidgets === 1 ? "" : "s"} on your ${plan} plan. Upgrade to add more.`
         );
       }
     }
 
     // Validate refresh interval if provided
     if (args.refreshInterval !== undefined) {
-      if (!isValidRefreshInterval(user.plan, args.refreshInterval)) {
-        const minMinutes = Math.floor(getMinRefreshInterval(user.plan) / 60);
+      if (!isValidRefreshInterval(plan, args.refreshInterval)) {
+        const minMinutes = Math.floor(getMinRefreshInterval(plan) / 60);
         const msg = minMinutes === 60
-          ? `Refresh interval must be 60 minutes for your ${user.plan} plan.`
-          : `Refresh interval must be between ${minMinutes} minutes and 60 minutes for your ${user.plan} plan.`;
+          ? `Refresh interval must be 60 minutes for your ${plan} plan.`
+          : `Refresh interval must be between ${minMinutes} minutes and 60 minutes for your ${plan} plan.`;
         throw new Error(msg);
       }
     }
@@ -124,12 +123,12 @@ export const create = mutation({
     const hasBranding = args.brandName || args.brandColor || args.logoStorageId || args.hideAirViewBranding;
     if (hasBranding && !limits.customBranding) {
       throw new Error(
-        `Custom branding is not available on your ${user.plan} plan. Upgrade to Pro or higher.`,
+        `Custom branding is not available on your ${plan} plan. Upgrade to Pro or higher.`,
       );
     }
 
     // Use provided interval or default based on plan
-    const refreshInterval = args.refreshInterval ?? getDefaultRefreshInterval(user.plan);
+    const refreshInterval = args.refreshInterval ?? getDefaultRefreshInterval(plan);
 
     let token = generateToken();
     let existing = await ctx.db
@@ -153,6 +152,7 @@ export const create = mutation({
 
     const tokenId = await ctx.db.insert("embedTokens", {
       userId: args.userId,
+      organizationId: args.organizationId,
       deviceId: args.deviceId,
       token,
       label: args.label,
@@ -214,15 +214,20 @@ export const updateBranding = mutation({
       throw new Error("Token not found or revoked.");
     }
 
-    const user = await ctx.db.get(token.userId);
-    if (!user) {
-      throw new Error("User not found.");
+    // Get plan from organization if available, fallback to user
+    let plan;
+    if (token.organizationId) {
+      plan = await getOrgPlan(ctx.db, token.organizationId);
+    } else {
+      const user = await ctx.db.get(token.userId);
+      if (!user) throw new Error("User not found.");
+      plan = (user.plan ?? "starter") as "starter" | "pro" | "business" | "custom";
     }
 
-    const limits = getPlanLimits(user.plan);
+    const limits = getPlanLimits(plan);
     if (!limits.customBranding) {
       throw new Error(
-        `Custom branding is not available on your ${user.plan} plan. Upgrade to Pro or higher.`,
+        `Custom branding is not available on your ${plan} plan. Upgrade to Pro or higher.`,
       );
     }
 
@@ -253,18 +258,22 @@ export const updateRefreshInterval = mutation({
       throw new Error("Token not found or revoked.");
     }
 
-    // Get user plan to validate refresh interval
-    const user = await ctx.db.get(token.userId);
-    if (!user) {
-      throw new Error("User not found.");
+    // Get plan from organization if available, fallback to user
+    let plan;
+    if (token.organizationId) {
+      plan = await getOrgPlan(ctx.db, token.organizationId);
+    } else {
+      const user = await ctx.db.get(token.userId);
+      if (!user) throw new Error("User not found.");
+      plan = (user.plan ?? "starter") as "starter" | "pro" | "business" | "custom";
     }
 
     // Validate refresh interval
-    if (!isValidRefreshInterval(user.plan, args.refreshInterval)) {
-      const minMinutes = Math.floor(getMinRefreshInterval(user.plan) / 60);
+    if (!isValidRefreshInterval(plan, args.refreshInterval)) {
+      const minMinutes = Math.floor(getMinRefreshInterval(plan) / 60);
       const msg = minMinutes === 60
-        ? `Refresh interval must be 60 minutes for your ${user.plan} plan.`
-        : `Refresh interval must be between ${minMinutes} minutes and 60 minutes for your ${user.plan} plan.`;
+        ? `Refresh interval must be 60 minutes for your ${plan} plan.`
+        : `Refresh interval must be between ${minMinutes} minutes and 60 minutes for your ${plan} plan.`;
       throw new Error(msg);
     }
 

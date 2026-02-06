@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useAuth, useUser, SignOutButton } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,53 +22,32 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import { User, CreditCard, Link2, LogOut, CheckCircle, XCircle, Trash2, AlertTriangle, Loader2 } from "lucide-react";
-import { getPlanLimits, type Plan } from "@/convex/lib/planLimits";
+import { getPlanLimits } from "@/convex/lib/planLimits";
+import { useDashboardContext } from "../_components/dashboard-context";
 
 export default function AccountPage() {
   const router = useRouter();
-  const { isLoaded, userId, signOut } = useAuth();
+  const { signOut } = useAuth();
   const { user } = useUser();
-  const getOrCreateUser = useMutation(api.users.getOrCreateUser);
+  const { convexUserId, organizationId, orgPlan } = useDashboardContext();
   const deleteUser = useMutation(api.users.deleteUser);
-  const [convexUserId, setConvexUserId] = useState<Id<"users"> | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteSuccess, setDeleteSuccess] = useState(false);
 
-  useEffect(() => {
-    if (!isLoaded || !userId || convexUserId || !user) return;
-
-    const email = user.primaryEmailAddress?.emailAddress;
-    if (!email) return;
-
-    getOrCreateUser({
-      authId: userId,
-      email,
-      name: user.fullName ?? undefined,
-    })
-      .then(setConvexUserId)
-      .catch(console.error);
-  }, [isLoaded, userId, user, convexUserId, getOrCreateUser]);
-
-  const convexUser = useQuery(
-    api.users.getCurrentUser,
-    userId ? { authId: userId } : "skip"
-  );
-
   const devices = useQuery(
     api.devices.list,
-    convexUserId ? { userId: convexUserId } : "skip"
+    { organizationId }
   );
 
   const embedTokens = useQuery(
     api.embedTokens.listForUser,
-    convexUserId ? { userId: convexUserId } : "skip"
+    { organizationId }
   );
 
-  const plan = (convexUser?.plan ?? "starter") as Plan;
-  const limits = getPlanLimits(plan);
+  const limits = getPlanLimits(orgPlan);
   const activeWidgets = embedTokens?.filter((t) => !t.isRevoked)?.length ?? 0;
 
   const initials = user?.fullName
@@ -176,7 +154,7 @@ export default function AccountPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Badge variant="secondary" className="text-sm">
-                {convexUser?.plan?.toUpperCase() ?? "STARTER"}
+                {orgPlan.toUpperCase()}
               </Badge>
               <span className="text-muted-foreground">Current Plan</span>
             </div>

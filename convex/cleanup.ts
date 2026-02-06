@@ -11,20 +11,43 @@ const BATCH_SIZE = 500;
 
 /**
  * Entry point for the daily retention cleanup cron.
- * Iterates over all users, computes their retention cutoff based on plan,
+ * Iterates over all organizations, computes their retention cutoff based on plan,
  * and schedules per-device cleanup mutations.
  */
 export const cleanupExpiredReadings = internalMutation({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
-    const users = await ctx.db.query("users").collect();
+    const orgs = await ctx.db.query("organizations").collect();
     const now = Date.now();
 
-    for (const user of users) {
-      const limits = getPlanLimits(user.plan as Plan);
+    for (const org of orgs) {
+      const limits = getPlanLimits(org.plan as Plan);
 
-      // Skip users with unlimited retention
+      // Skip orgs with unlimited retention
+      if (limits.maxHistoryDays === Infinity) continue;
+
+      const cutoffTs = now - limits.maxHistoryDays * 24 * 60 * 60 * 1000;
+
+      const devices = await ctx.db
+        .query("devices")
+        .withIndex("by_organizationId", (q) => q.eq("organizationId", org._id))
+        .collect();
+
+      for (const device of devices) {
+        // Fan out per-device cleanup to stay within mutation limits
+        await ctx.scheduler.runAfter(0, internal.cleanup.cleanupDeviceReadings, {
+          deviceId: device._id,
+          cutoffTs,
+        });
+      }
+    }
+
+    // Also handle devices without an organizationId (pre-migration data)
+    const users = await ctx.db.query("users").collect();
+    for (const user of users) {
+      const plan = (user.plan ?? "starter") as Plan;
+      const limits = getPlanLimits(plan);
       if (limits.maxHistoryDays === Infinity) continue;
 
       const cutoffTs = now - limits.maxHistoryDays * 24 * 60 * 60 * 1000;
@@ -35,7 +58,9 @@ export const cleanupExpiredReadings = internalMutation({
         .collect();
 
       for (const device of devices) {
-        // Fan out per-device cleanup to stay within mutation limits
+        // Skip devices already handled by org cleanup
+        if (device.organizationId) continue;
+
         await ctx.scheduler.runAfter(0, internal.cleanup.cleanupDeviceReadings, {
           deviceId: device._id,
           cutoffTs,

@@ -39,16 +39,17 @@ http.route({
       return new Response("Unknown device", { status: 404 });
     }
 
-    console.log(`[WEBHOOK] Device found: MAC ${mac} (${deviceInfo._id}), owner: ${deviceInfo.userId}`);
+    console.log(`[WEBHOOK] Device found: MAC ${mac} (${deviceInfo._id}), owner: ${deviceInfo.userId}, org: ${deviceInfo.organizationId}`);
 
-    // Get the device owner's config for signature verification
+    // Get the provider config for signature verification (prefer org-based lookup)
     const config = await ctx.runQuery(internal.providers.getConfig, {
+      organizationId: deviceInfo.organizationId,
       userId: deviceInfo.userId,
       provider: "qingping",
     });
 
     if (!config?.appSecret) {
-      console.error(`[WEBHOOK] Webhook secret missing for user: ${deviceInfo.userId}`);
+      console.error(`[WEBHOOK] Webhook secret missing for device: ${mac}`);
       return new Response("Webhook secret missing for device owner", { status: 401 });
     }
 

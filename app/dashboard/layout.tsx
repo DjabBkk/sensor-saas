@@ -10,6 +10,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { Sidebar } from "./_components/Sidebar";
 import { AddDeviceDialog } from "./_components/AddDeviceDialog";
 import { AddDeviceDialogProvider } from "./_components/add-device-context";
+import { DashboardProvider } from "./_components/dashboard-context";
 import { getPlanLimits, type Plan } from "@/convex/lib/planLimits";
 
 export default function DashboardLayout({
@@ -68,22 +69,33 @@ export default function DashboardLayout({
     );
   }, [isSidebarCollapsed]);
 
+  // Resolve the user's organizations
+  const userOrgs = useQuery(
+    api.organizations.getForUser,
+    convexUserId ? { userId: convexUserId } : "skip",
+  );
+
+  // Use the personal org (or first available)
+  const activeOrg = userOrgs?.find((org) => org.isPersonal) ?? userOrgs?.[0] ?? null;
+  const organizationId = activeOrg?._id ?? null;
+  const orgPlan = (activeOrg?.plan ?? "starter") as Plan;
+
   const devices = useQuery(
     api.devices.list,
-    convexUserId ? { userId: convexUserId } : "skip"
+    organizationId ? { organizationId } : "skip"
   );
   const rooms = useQuery(
     api.rooms.list,
-    convexUserId ? { userId: convexUserId } : "skip"
+    organizationId ? { organizationId } : "skip"
   );
   const convexUser = useQuery(
     api.users.getCurrentUser,
     userId ? { authId: userId } : "skip"
   );
-  const plan = (convexUser?.plan ?? "starter") as Plan;
-  const maxDevices = getPlanLimits(plan).maxDevices;
 
-  if (!isLoaded || !convexUserId) {
+  const maxDevices = getPlanLimits(orgPlan).maxDevices;
+
+  if (!isLoaded || !convexUserId || !organizationId) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-muted-foreground">Loading...</div>
@@ -92,28 +104,35 @@ export default function DashboardLayout({
   }
 
   return (
-    <AddDeviceDialogProvider openDialog={() => setAddDeviceOpen(true)}>
-      <div className="flex min-h-screen">
-        <Sidebar
-          devices={devices ?? []}
-          rooms={rooms ?? []}
-          userId={convexUserId}
-          maxDevices={maxDevices}
-          onAddDevice={() => setAddDeviceOpen(true)}
-          isCollapsed={isSidebarCollapsed}
-          onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
-          userEmail={convexUser?.email}
-          userPlan={plan}
-        />
-        <main className="flex-1 overflow-auto">{children}</main>
-        <AddDeviceDialog
-          open={addDeviceOpen}
-          onOpenChange={setAddDeviceOpen}
-          userId={convexUserId}
-          maxDevices={maxDevices}
-          deviceCount={devices?.length ?? 0}
-        />
-      </div>
-    </AddDeviceDialogProvider>
+    <DashboardProvider
+      convexUserId={convexUserId}
+      organizationId={organizationId}
+      orgPlan={orgPlan}
+    >
+      <AddDeviceDialogProvider openDialog={() => setAddDeviceOpen(true)}>
+        <div className="flex min-h-screen">
+          <Sidebar
+            devices={devices ?? []}
+            rooms={rooms ?? []}
+            userId={convexUserId}
+            maxDevices={maxDevices}
+            onAddDevice={() => setAddDeviceOpen(true)}
+            isCollapsed={isSidebarCollapsed}
+            onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
+            userEmail={convexUser?.email}
+            userPlan={orgPlan}
+          />
+          <main className="flex-1 overflow-auto">{children}</main>
+          <AddDeviceDialog
+            open={addDeviceOpen}
+            onOpenChange={setAddDeviceOpen}
+            userId={convexUserId}
+            organizationId={organizationId}
+            maxDevices={maxDevices}
+            deviceCount={devices?.length ?? 0}
+          />
+        </div>
+      </AddDeviceDialogProvider>
+    </DashboardProvider>
   );
 }

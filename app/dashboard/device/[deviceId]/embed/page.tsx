@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, use } from "react";
-import { useAuth, useUser } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
+
 
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import { useDashboardContext } from "../../../_components/dashboard-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,17 +39,13 @@ export default function DeviceEmbedPage({
   params: Promise<{ deviceId: string }>;
 }) {
   const { deviceId } = use(params);
-  const router = useRouter();
-  const { isLoaded, userId } = useAuth();
-  const { user } = useUser();
-  const getOrCreateUser = useMutation(api.users.getOrCreateUser);
+  const { convexUserId, organizationId, orgPlan } = useDashboardContext();
   const createToken = useMutation(api.embedTokens.create);
   const revokeToken = useMutation(api.embedTokens.revoke);
   const updateRefreshInterval = useMutation(api.embedTokens.updateRefreshInterval);
   const updateBranding = useMutation(api.embedTokens.updateBranding);
   const generateUploadUrl = useMutation(api.storage.generateUploadUrl);
 
-  const [convexUserId, setConvexUserId] = useState<Id<"users"> | null>(null);
   const [label, setLabel] = useState("");
   const [description, setDescription] = useState("");
   const [style, setStyle] = useState<EmbedStyle>("card");
@@ -70,33 +66,6 @@ export default function DeviceEmbedPage({
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!isLoaded) return;
-    if (!userId) {
-      router.replace("/login");
-      return;
-    }
-    if (convexUserId || !user) return;
-
-    const email = user.primaryEmailAddress?.emailAddress;
-    if (!email) return;
-
-    let cancelled = false;
-    getOrCreateUser({
-      authId: userId,
-      email,
-      name: user.fullName ?? undefined,
-    })
-      .then((id) => {
-        if (!cancelled) setConvexUserId(id);
-      })
-      .catch(console.error);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isLoaded, userId, user, convexUserId, getOrCreateUser, router]);
-
-  useEffect(() => {
     if (typeof window !== "undefined") {
       setOrigin(window.location.origin);
     }
@@ -113,17 +82,13 @@ export default function DeviceEmbedPage({
     deviceId: deviceId as Id<"devices">,
     limit: 96,
   });
-  const convexUser = useQuery(
-    api.users.getCurrentUser,
-    userId ? { authId: userId } : "skip"
-  );
   const allUserTokens = useQuery(
     api.embedTokens.listForUser,
-    convexUserId ? { userId: convexUserId } : "skip",
+    organizationId ? { organizationId } : "skip",
   );
   const allUserKiosks = useQuery(
     api.kioskConfigs.listForUser,
-    convexUserId ? { userId: convexUserId } : "skip",
+    organizationId ? { organizationId } : "skip",
   );
 
   const activeTokens = useMemo(
@@ -140,7 +105,7 @@ export default function DeviceEmbedPage({
     () => (allUserKiosks ?? []).filter((k) => !k.isRevoked).length,
     [allUserKiosks],
   );
-  const planLimits = convexUser?.plan ? getPlanLimits(convexUser.plan) : null;
+  const planLimits = orgPlan ? getPlanLimits(orgPlan) : null;
   const isSharedLimit = planLimits?.sharedWidgetKioskLimit !== null && planLimits?.sharedWidgetKioskLimit !== undefined;
   const combinedCount = allActiveTokenCount + activeKioskCount;
   const displayLimit = isSharedLimit
@@ -212,18 +177,18 @@ export default function DeviceEmbedPage({
 
   // Generate refresh interval options based on plan
   const refreshIntervalOptions = useMemo(() => {
-    if (!convexUser?.plan) return [];
-    const minInterval = PLAN_MIN_REFRESH[convexUser.plan] ?? 3600;
+    if (!orgPlan) return [];
+    const minInterval = PLAN_MIN_REFRESH[orgPlan] ?? 3600;
     return ALL_REFRESH_OPTIONS.filter((opt) => opt.value >= minInterval);
-  }, [convexUser?.plan]);
+  }, [orgPlan]);
 
   // Set default refresh interval based on plan when user loads
   useEffect(() => {
-    if (convexUser?.plan && refreshInterval === null) {
-      const minInterval = PLAN_MIN_REFRESH[convexUser.plan] ?? 3600;
+    if (orgPlan && refreshInterval === null) {
+      const minInterval = PLAN_MIN_REFRESH[orgPlan] ?? 3600;
       setRefreshInterval(minInterval);
     }
-  }, [convexUser?.plan, refreshInterval]);
+  }, [orgPlan, refreshInterval]);
   const widgetDimensions = useMemo(() => {
     if (style === "badge") {
       if (size === "small") return { width: 160, height: 40 };
@@ -261,7 +226,7 @@ export default function DeviceEmbedPage({
   const canBrand = planLimits?.customBranding === true;
 
   const handleCreate = async () => {
-    if (!convexUserId) {
+    if (!convexUserId || !organizationId) {
       setError("User sync not ready yet.");
       return;
     }
@@ -269,6 +234,7 @@ export default function DeviceEmbedPage({
     try {
       const created = await createToken({
         userId: convexUserId,
+        organizationId,
         deviceId: deviceId as Id<"devices">,
         label: label || undefined,
         description: description || undefined,
@@ -296,11 +262,11 @@ export default function DeviceEmbedPage({
 
   const handleLogoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !convexUserId) return;
+    if (!file || !organizationId) return;
 
     setIsUploadingLogo(true);
     try {
-      const uploadUrl = await generateUploadUrl({ userId: convexUserId });
+      const uploadUrl = await generateUploadUrl({ organizationId });
       const result = await fetch(uploadUrl, {
         method: "POST",
         headers: { "Content-Type": file.type },
@@ -325,7 +291,7 @@ export default function DeviceEmbedPage({
     } finally {
       setIsUploadingLogo(false);
     }
-  }, [convexUserId, generateUploadUrl, selectedTokenId, updateBranding, brandName, brandColor, hideAirViewBranding]);
+  }, [organizationId, generateUploadUrl, selectedTokenId, updateBranding, brandName, brandColor, hideAirViewBranding]);
 
   const handleSaveBranding = useCallback(async () => {
     if (!selectedTokenId) return;

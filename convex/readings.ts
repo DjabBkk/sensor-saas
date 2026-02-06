@@ -50,8 +50,9 @@ const avgOrNull = (sum: number, count: number) =>
   count > 0 ? sum / count : null;
 
 /**
- * Compute the earliest allowed startTs based on a device owner's plan retention.
- * Returns 0 if the plan has unlimited retention or the device/user can't be found.
+ * Compute the earliest allowed startTs based on the organization's plan retention.
+ * Falls back to user.plan for pre-migration data.
+ * Returns startTs unchanged if the plan has unlimited retention or data can't be found.
  */
 async function clampStartTsForRetention(
   ctx: { db: { get: (id: any) => Promise<any> } },
@@ -60,9 +61,20 @@ async function clampStartTsForRetention(
 ): Promise<number> {
   const device = await ctx.db.get(deviceId);
   if (!device) return startTs;
-  const user = await ctx.db.get(device.userId);
-  if (!user) return startTs;
-  const limits = getPlanLimits(user.plan as Plan);
+
+  // Get plan from organization if available, fallback to user
+  let plan: Plan | null = null;
+  if (device.organizationId) {
+    const org = await ctx.db.get(device.organizationId);
+    if (org) plan = org.plan as Plan;
+  }
+  if (!plan) {
+    const user = await ctx.db.get(device.userId);
+    if (!user) return startTs;
+    plan = (user.plan ?? "starter") as Plan;
+  }
+
+  const limits = getPlanLimits(plan);
   if (limits.maxHistoryDays === Infinity) return startTs;
   const retentionMs = limits.maxHistoryDays * 24 * 60 * 60 * 1000;
   return Math.max(startTs, Date.now() - retentionMs);
@@ -111,13 +123,13 @@ export const history = query({
 
 /**
  * Fetch readings for CSV export.
- * - Verifies device belongs to the requesting user.
- * - Clamps startTs to the user's plan retention window.
+ * - Verifies device belongs to the requesting organization.
+ * - Clamps startTs to the org's plan retention window.
  * - Returns readings in ascending (chronological) order, capped at 10 000.
  */
 export const forExport = query({
   args: {
-    userId: v.id("users"),
+    organizationId: v.id("organizations"),
     deviceId: v.id("devices"),
     startTs: v.number(),
     endTs: v.number(),
@@ -129,17 +141,17 @@ export const forExport = query({
     hitLimit: v.boolean(),
   }),
   handler: async (ctx, args) => {
-    // 1. Verify device belongs to user
+    // 1. Verify device belongs to organization
     const device = await ctx.db.get(args.deviceId);
-    if (!device || device.userId !== args.userId) {
+    if (!device || device.organizationId !== args.organizationId) {
       throw new Error("Device not found");
     }
 
-    // 2. Look up user plan and clamp startTs to retention window
-    const user = await ctx.db.get(args.userId);
-    if (!user) throw new Error("User not found");
+    // 2. Look up org plan and clamp startTs to retention window
+    const org = await ctx.db.get(args.organizationId);
+    if (!org) throw new Error("Organization not found");
 
-    const limits = getPlanLimits(user.plan as Plan);
+    const limits = getPlanLimits(org.plan as Plan);
     const retentionMs =
       limits.maxHistoryDays === Infinity
         ? Infinity

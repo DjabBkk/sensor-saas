@@ -1,11 +1,13 @@
 import { query, mutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { getMinRefreshInterval, getPlanLimits, isValidRefreshInterval } from "./lib/planLimits";
+import { getOrgPlan } from "./lib/orgAuth";
 
 const kioskConfigShape = v.object({
   _id: v.id("kioskConfigs"),
   _creationTime: v.number(),
   userId: v.id("users"),
+  organizationId: v.optional(v.id("organizations")),
   token: v.string(),
   label: v.optional(v.string()),
   title: v.optional(v.string()),
@@ -29,13 +31,13 @@ const generateToken = () => {
 
 export const listForUser = query({
   args: {
-    userId: v.id("users"),
+    organizationId: v.id("organizations"),
   },
   returns: v.array(kioskConfigShape),
   handler: async (ctx, args) => {
     return await ctx.db
       .query("kioskConfigs")
-      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .withIndex("by_organizationId", (q) => q.eq("organizationId", args.organizationId))
       .order("desc")
       .collect();
   },
@@ -44,6 +46,7 @@ export const listForUser = query({
 export const create = mutation({
   args: {
     userId: v.id("users"),
+    organizationId: v.id("organizations"),
     label: v.optional(v.string()),
     title: v.optional(v.string()),
     mode: v.union(v.literal("single"), v.literal("multi")),
@@ -59,41 +62,38 @@ export const create = mutation({
   },
   returns: kioskConfigShape,
   handler: async (ctx, args) => {
-    // Get user plan to validate limits
-    const user = await ctx.db.get(args.userId);
-    if (!user) {
-      throw new Error("User not found.");
-    }
+    // Get plan from organization
+    const plan = await getOrgPlan(ctx.db, args.organizationId);
+    const limits = getPlanLimits(plan);
 
     // Enforce kiosk/widget limit
-    const limits = getPlanLimits(user.plan);
     if (limits.sharedWidgetKioskLimit !== null) {
       // Shared limit: count kiosks + widgets combined
-      const allUserKiosks = await ctx.db
+      const allOrgKiosks = await ctx.db
         .query("kioskConfigs")
-        .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+        .withIndex("by_organizationId", (q) => q.eq("organizationId", args.organizationId))
         .collect();
-      const activeKiosks = allUserKiosks.filter((k) => !k.isRevoked).length;
-      const allUserTokens = await ctx.db
+      const activeKiosks = allOrgKiosks.filter((k) => !k.isRevoked).length;
+      const allOrgTokens = await ctx.db
         .query("embedTokens")
-        .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+        .withIndex("by_organizationId", (q) => q.eq("organizationId", args.organizationId))
         .collect();
-      const activeWidgets = allUserTokens.filter((t) => !t.isRevoked).length;
+      const activeWidgets = allOrgTokens.filter((t) => !t.isRevoked).length;
       if (activeKiosks + activeWidgets >= limits.sharedWidgetKioskLimit) {
         throw new Error(
-          `You've reached the maximum of ${limits.sharedWidgetKioskLimit} widget or kiosk on your ${user.plan} plan. Upgrade to add more.`
+          `You've reached the maximum of ${limits.sharedWidgetKioskLimit} widget or kiosk on your ${plan} plan. Upgrade to add more.`
         );
       }
     } else if (limits.maxKiosks !== Infinity) {
       // Separate per-type limit
-      const allUserKiosks = await ctx.db
+      const allOrgKiosks = await ctx.db
         .query("kioskConfigs")
-        .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+        .withIndex("by_organizationId", (q) => q.eq("organizationId", args.organizationId))
         .collect();
-      const activeCount = allUserKiosks.filter((k) => !k.isRevoked).length;
+      const activeCount = allOrgKiosks.filter((k) => !k.isRevoked).length;
       if (activeCount >= limits.maxKiosks) {
         throw new Error(
-          `You've reached the maximum of ${limits.maxKiosks} kiosk${limits.maxKiosks === 1 ? "" : "s"} on your ${user.plan} plan. Upgrade to add more.`
+          `You've reached the maximum of ${limits.maxKiosks} kiosk${limits.maxKiosks === 1 ? "" : "s"} on your ${plan} plan. Upgrade to add more.`
         );
       }
     }
@@ -102,16 +102,16 @@ export const create = mutation({
     const hasBranding = args.brandName || args.brandColor || args.logoStorageId || args.hideAirViewBranding;
     if (hasBranding && !limits.customBranding) {
       throw new Error(
-        `Custom branding is not available on your ${user.plan} plan. Upgrade to Pro or higher.`,
+        `Custom branding is not available on your ${plan} plan. Upgrade to Pro or higher.`,
       );
     }
 
     // Validate refresh interval
-    if (!isValidRefreshInterval(user.plan, args.refreshInterval)) {
-      const minMinutes = Math.floor(getMinRefreshInterval(user.plan) / 60);
+    if (!isValidRefreshInterval(plan, args.refreshInterval)) {
+      const minMinutes = Math.floor(getMinRefreshInterval(plan) / 60);
       const msg = minMinutes === 60
-        ? `Refresh interval must be 60 minutes for your ${user.plan} plan.`
-        : `Refresh interval must be between ${minMinutes} minutes and 60 minutes for your ${user.plan} plan.`;
+        ? `Refresh interval must be 60 minutes for your ${plan} plan.`
+        : `Refresh interval must be between ${minMinutes} minutes and 60 minutes for your ${plan} plan.`;
       throw new Error(msg);
     }
 
@@ -137,6 +137,7 @@ export const create = mutation({
 
     const configId = await ctx.db.insert("kioskConfigs", {
       userId: args.userId,
+      organizationId: args.organizationId,
       token,
       label: args.label,
       title: args.title,
@@ -184,12 +185,20 @@ export const update = mutation({
     if (hasBranding) {
       const config = await ctx.db.get(args.configId);
       if (config) {
-        const user = await ctx.db.get(config.userId);
-        if (user) {
-          const limits = getPlanLimits(user.plan);
+        let plan;
+        if (config.organizationId) {
+          plan = await getOrgPlan(ctx.db, config.organizationId);
+        } else {
+          const user = await ctx.db.get(config.userId);
+          if (user) {
+            plan = (user.plan ?? "starter") as "starter" | "pro" | "business" | "custom";
+          }
+        }
+        if (plan) {
+          const limits = getPlanLimits(plan);
           if (!limits.customBranding) {
             throw new Error(
-              `Custom branding is not available on your ${user.plan} plan. Upgrade to Pro or higher.`,
+              `Custom branding is not available on your ${plan} plan. Upgrade to Pro or higher.`,
             );
           }
         }

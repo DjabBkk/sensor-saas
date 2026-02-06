@@ -13,3 +13,9 @@ export const planValidator = v.union(
   v.literal("business"),
   v.literal("custom"),
 );
+
+export const orgRoleValidator = v.union(
+  v.literal("owner"),
+  v.literal("admin"),
+  v.literal("member"),
+);
